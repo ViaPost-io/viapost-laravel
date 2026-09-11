@@ -29,7 +29,7 @@ use ViaPost\Laravel\Resources\WebhooksResource;
 
 final class Client
 {
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.1.1';
 
     /** @var list<string> */
     private const PROTECTED_REQUEST_HEADERS = [
