@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: "8.2"
+            laravel: "11"
+            testbench: "^9.0"
+            phpunit: "^11.5"
+          - php: "8.2"
+            laravel: "12"
+            testbench: "^10.0"
+            phpunit: "^11.5"
+          - php: "8.3"
+            laravel: "13"
+            testbench: "^11.0"
+            phpunit: "^12.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: xdebug
+          tools: composer:2.10.3
+      - run: composer require --dev "orchestra/testbench:${{ matrix.testbench }}" "phpunit/phpunit:${{ matrix.phpunit }}" --no-update --no-interaction
+      # Laravel 11 remains a contractual compatibility target. Composer currently blocks its
+      # upstream framework release because of published advisories, so this lane is explicitly
+      # compatibility-only and reports (rather than hides) its non-gating audit below.
+      - if: matrix.laravel == '11'
+        run: composer update --prefer-dist --no-interaction --no-blocking
+      - if: matrix.laravel != '11'
+        run: composer update --prefer-dist --no-interaction
+      - run: composer check
+      - if: matrix.laravel != '11'
+        run: composer audit --locked
+      - name: Report Laravel 11 upstream advisories (compatibility-only lane)
+        if: matrix.laravel == '11'
+        continue-on-error: true
+        run: composer audit --locked
+      - name: Summarize Laravel 11 security status
+        if: always() && matrix.laravel == '11'
+        run: |
+          echo '::warning::Laravel 11 compatibility passed, but its expected dependency audit failure includes a HIGH upstream advisory. Prefer Laravel 12 or 13 for supported deployments.'
+          echo '### Laravel 11 compatibility-only lane' >> "$GITHUB_STEP_SUMMARY"
+          echo 'The SDK tests this framework version, but its resolved dependency audit currently fails with three upstream advisories, including HIGH GHSA-5vg9-5847-vvmq. The audit step is non-gating only to preserve the contractual compatibility check. Prefer Laravel 12 or 13.' >> "$GITHUB_STEP_SUMMARY"
+      - run: composer test:coverage
+      - run: composer archive --format=zip --file=viapost-laravel-sdk

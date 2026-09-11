@@ -1,0 +1,24 @@
+name: OpenAPI contract drift
+
+on:
+  schedule:
+    - cron: "17 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: "8.2"
+          coverage: none
+      - name: Download canonical contract
+        run: curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 https://raw.githubusercontent.com/ViaPost-io/base-code/main/docs/openapi/public.yaml --output /tmp/public.yaml
+      - run: php scripts/check-openapi.php /tmp/public.yaml

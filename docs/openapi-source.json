@@ -1,0 +1,7 @@
+{
+    "repository": "https://github.com/ViaPost-io/base-code",
+    "ref": "origin/main",
+    "commit": "88320bca3a06e8c7d79b1a49ff1c1029c97c83b8",
+    "path": "docs/openapi/public.yaml",
+    "sha256": "d1f223342ad1ca326ba716af6e508c78594e1b108958cce2ec4a1efd31a9773a"
+}

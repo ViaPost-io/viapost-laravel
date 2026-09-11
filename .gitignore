@@ -1,0 +1,9 @@
+/vendor/
+/composer.lock
+/.phpunit.cache/
+/.phpstan.cache/
+/coverage/
+/*.zip
+/*.zip.sha256
+/.phpunit.result.cache
+/.DS_Store

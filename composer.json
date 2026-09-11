@@ -1,0 +1,84 @@
+{
+    "name": "viapost/laravel-sdk",
+    "description": "Official Laravel SDK for the ViaPost API",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["viapost", "laravel", "email", "transactional-email", "sdk"],
+    "homepage": "https://docs.viapost.io",
+    "support": {
+        "issues": "https://github.com/ViaPost-io/viapost-laravel/issues",
+        "source": "https://github.com/ViaPost-io/viapost-laravel"
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/contracts": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/http": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/support": "^11.0 || ^12.0 || ^13.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.24",
+        "larastan/larastan": "^3.8",
+        "orchestra/testbench": "^9.0 || ^10.0 || ^11.0",
+        "phpunit/phpunit": "^11.5 || ^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "ViaPost\\Laravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ViaPost\\Laravel\\Tests\\": "tests/"
+        }
+    },
+    "archive": {
+        "exclude": [
+            "/.git",
+            "/.github",
+            "/.gitattributes",
+            "/.gitignore",
+            "/.phpstan.cache",
+            "/.phpunit.cache",
+            "/composer.lock",
+            "/docs",
+            "/tests",
+            "/phpunit.xml.dist",
+            "/phpstan.neon.dist",
+            "/vendor"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "ViaPost\\Laravel\\ViaPostServiceProvider"
+            ],
+            "aliases": {
+                "ViaPost": "ViaPost\\Laravel\\Facades\\ViaPost"
+            }
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": false
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "check": [
+            "@validate:package",
+            "@format:check",
+            "@analyse",
+            "@test",
+            "@contract:check"
+        ],
+        "contract:check": "php scripts/check-openapi.php",
+        "format": "pint",
+        "format:check": "pint --test",
+        "test": "phpunit",
+        "test:coverage": "phpunit --coverage-text --fail-on-warning",
+        "validate:package": "@composer validate --strict"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

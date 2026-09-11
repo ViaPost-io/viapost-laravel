@@ -1,0 +1,77 @@
+name: Verify GitHub release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: composer:2.10.3
+      - run: git fetch --no-tags origin main
+      - run: git merge-base --is-ancestor HEAD origin/main
+      - run: php scripts/check-release-tag.php "${{ github.event.release.tag_name }}"
+      - run: composer install --prefer-dist --no-interaction
+      - run: composer check
+      - run: composer audit --locked
+      - name: Build release archive
+        env:
+          COMPOSER_ROOT_VERSION: ${{ github.event.release.tag_name }}
+        run: composer archive --format=zip --file=viapost-laravel-sdk
+      - name: Checksum release archive
+        run: sha256sum viapost-laravel-sdk.zip > viapost-laravel-sdk.zip.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: composer-package
+          path: |
+            viapost-laravel-sdk.zip
+            viapost-laravel-sdk.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  attach-to-github-release:
+    needs: verify-and-archive
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: composer-package
+          path: dist
+      - name: Attach Composer archive and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/* --clobber
+
+  attest-build-provenance:
+    needs: verify-and-archive
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: composer-package
+          path: dist
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/viapost-laravel-sdk.zip
