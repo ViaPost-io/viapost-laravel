@@ -23,6 +23,15 @@ final readonly class MessagesResource extends Resource
         return $this->client->request('GET', '/v1/messages/'.$this->pathParam('messageId', $messageId));
     }
 
+    public function raw(string $messageId): string
+    {
+        return $this->client->requestRaw(
+            'GET',
+            '/v1/messages/'.$this->pathParam('messageId', $messageId).'/raw',
+            accept: 'message/rfc822',
+        );
+    }
+
     /** @return array<string, mixed> */
     public function events(string $messageId): array
     {

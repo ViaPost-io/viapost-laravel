@@ -11,6 +11,7 @@ use Illuminate\Http\Client\RequestException as LaravelRequestException;
 use Illuminate\Http\Client\Response;
 use InvalidArgumentException;
 use JsonException;
+use LogicException;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Throwable;
@@ -21,19 +22,27 @@ use ViaPost\Laravel\Exceptions\TimeoutException;
 use ViaPost\Laravel\Exceptions\UnexpectedResponseException;
 use ViaPost\Laravel\Resources\AutomationsResource;
 use ViaPost\Laravel\Resources\DomainsResource;
+use ViaPost\Laravel\Resources\InboundMessagesResource;
 use ViaPost\Laravel\Resources\MessagesResource;
 use ViaPost\Laravel\Resources\SendResource;
+use ViaPost\Laravel\Resources\SuppressionsResource;
 use ViaPost\Laravel\Resources\TemplatesResource;
 use ViaPost\Laravel\Resources\UsageResource;
 use ViaPost\Laravel\Resources\WebhooksResource;
+use WeakMap;
 
 final class Client
 {
-    public const VERSION = '0.1.1';
+    public const VERSION = '0.2.0';
+
+    private const MAX_JSON_RESPONSE_BYTES = 67_108_864;
+
+    private const MAX_RAW_RESPONSE_BYTES = 134_217_728;
 
     /** @var list<string> */
     private const PROTECTED_REQUEST_HEADERS = [
         'accept',
+        'accept-encoding',
         'authorization',
         'connection',
         'content-length',
@@ -55,7 +64,8 @@ final class Client
         'x-xsrf-token',
     ];
 
-    private readonly string $apiKey;
+    /** @var WeakMap<object, string>|null */
+    private static ?WeakMap $apiKeys = null;
 
     private readonly string $baseUrl;
 
@@ -64,6 +74,10 @@ final class Client
     private readonly SendResource $sendResource;
 
     private readonly MessagesResource $messagesResource;
+
+    private readonly InboundMessagesResource $inboundMessagesResource;
+
+    private readonly SuppressionsResource $suppressionsResource;
 
     private readonly DomainsResource $domainsResource;
 
@@ -85,28 +99,58 @@ final class Client
         private readonly int $retryBaseDelayMs = 250,
         private readonly int $retryMaxDelayMs = 30_000,
         ?Factory $http = null,
+        private readonly int $maxRawResponseBytes = 41_943_040,
     ) {
         $apiKey = trim($apiKey);
         if (preg_match('/\A[\x21-\x7E]+\z/D', $apiKey) !== 1) {
             throw new InvalidArgumentException('ViaPost api key must contain visible ASCII characters only.');
         }
 
-        $this->apiKey = $apiKey;
+        self::apiKeys()[$this] = $apiKey;
         $this->baseUrl = self::normalizeBaseUrl($baseUrl);
         $this->assertPositive($timeout, 'timeout');
         $this->assertPositive($connectTimeout, 'connect timeout');
         $this->assertPositive($maxResponseBytes, 'maximum response bytes');
+        if ($maxResponseBytes > self::MAX_JSON_RESPONSE_BYTES) {
+            throw new InvalidArgumentException('ViaPost maximum JSON response bytes cannot exceed 64 MiB.');
+        }
+        $this->assertPositive($maxRawResponseBytes, 'maximum raw response bytes');
+        if ($maxRawResponseBytes > self::MAX_RAW_RESPONSE_BYTES) {
+            throw new InvalidArgumentException('ViaPost maximum raw response bytes cannot exceed 128 MiB.');
+        }
         $this->assertNonNegative($maxRetries, 'maximum retries');
         $this->assertNonNegative($retryBaseDelayMs, 'retry base delay');
         $this->assertNonNegative($retryMaxDelayMs, 'retry maximum delay');
         $this->http = $http ?? new Factory;
         $this->sendResource = new SendResource($this);
         $this->messagesResource = new MessagesResource($this);
+        $this->inboundMessagesResource = new InboundMessagesResource($this);
+        $this->suppressionsResource = new SuppressionsResource($this);
         $this->domainsResource = new DomainsResource($this);
         $this->templatesResource = new TemplatesResource($this);
         $this->webhooksResource = new WebhooksResource($this);
         $this->automationsResource = new AutomationsResource($this);
         $this->usageResource = new UsageResource($this);
+    }
+
+    /** @return array<string, int|string> */
+    public function __debugInfo(): array
+    {
+        return [
+            'apiKey' => '[REDACTED]',
+            'baseUrl' => $this->baseUrl,
+            'timeout' => $this->timeout,
+            'connectTimeout' => $this->connectTimeout,
+            'maxResponseBytes' => $this->maxResponseBytes,
+            'maxRawResponseBytes' => $this->maxRawResponseBytes,
+            'maxRetries' => $this->maxRetries,
+        ];
+    }
+
+    /** @return never */
+    public function __serialize(): array
+    {
+        throw new LogicException('ViaPost Client must not be serialized because it contains credentials.');
     }
 
     public function send(): SendResource
@@ -117,6 +161,16 @@ final class Client
     public function messages(): MessagesResource
     {
         return $this->messagesResource;
+    }
+
+    public function inboundMessages(): InboundMessagesResource
+    {
+        return $this->inboundMessagesResource;
+    }
+
+    public function suppressions(): SuppressionsResource
+    {
+        return $this->suppressionsResource;
     }
 
     public function domains(): DomainsResource
@@ -157,62 +211,162 @@ final class Client
         ?array $body = null,
         array $headers = [],
     ): array|string|int|float|bool|null {
+        $response = $this->performRequest($method, $path, $query, jsonBody: $body, headers: $headers);
+
+        return $this->decode($response, strtoupper($method), $this->url($path));
+    }
+
+    /**
+     * @param  array<string, scalar|list<scalar>|null>  $query
+     * @param  array<string, string>  $headers
+     * @return array<string, mixed>|list<mixed>|scalar|null
+     */
+    public function requestJsonWithRawBody(
+        string $method,
+        string $path,
+        string $body,
+        string $contentType,
+        array $query = [],
+        array $headers = [],
+    ): array|string|int|float|bool|null {
+        $response = $this->performRequest(
+            $method,
+            $path,
+            $query,
+            rawBody: $body,
+            headers: $headers,
+            contentType: $contentType,
+        );
+
+        return $this->decode($response, strtoupper($method), $this->url($path));
+    }
+
+    /**
+     * @param  array<string, scalar|list<scalar>|null>  $query
+     * @param  array<string, string>  $headers
+     */
+    public function requestRaw(
+        string $method,
+        string $path,
+        array $query = [],
+        string $accept = 'application/octet-stream',
+        array $headers = [],
+    ): string {
+        $response = $this->performRequest(
+            $method,
+            $path,
+            $query,
+            headers: $headers,
+            accept: $accept,
+            successfulResponseLimit: $this->maxRawResponseBytes,
+        );
+
+        if (! $response->successful()) {
+            $this->decode($response, strtoupper($method), $this->url($path));
+        }
+
+        $body = $response->body();
+        if (strlen($body) > $this->maxRawResponseBytes) {
+            throw new ResponseTooLargeException($this->maxRawResponseBytes);
+        }
+
+        return $body;
+    }
+
+    /**
+     * @param  array<string, scalar|list<scalar>|null>  $query
+     * @param  array<string, mixed>|null  $jsonBody
+     * @param  array<string, string>  $headers
+     */
+    private function performRequest(
+        string $method,
+        string $path,
+        array $query = [],
+        ?array $jsonBody = null,
+        ?string $rawBody = null,
+        array $headers = [],
+        string $accept = 'application/json',
+        ?string $contentType = null,
+        ?int $successfulResponseLimit = null,
+    ): Response {
+        if ($jsonBody !== null && $rawBody !== null) {
+            throw new InvalidArgumentException('ViaPost requests cannot contain both JSON and raw bodies.');
+        }
+
         $method = strtoupper($method);
-        $url = $this->baseUrl.'/'.ltrim($path, '/');
+        $url = $this->url($path);
         $headers = $this->sanitizeRequestHeaders($headers);
         $safeToRetry = in_array($method, ['GET', 'HEAD'], true);
+        $successfulResponseLimit ??= $this->maxResponseBytes;
         $attempt = 0;
 
         do {
-            $responseTooLarge = false;
+            $responseTooLargeLimit = null;
+            $activeResponseLimit = $this->maxResponseBytes;
 
             try {
                 $pending = $this->http
                     ->withHeaders($headers)
-                    ->withToken($this->apiKey)
-                    ->acceptJson()
+                    ->withToken($this->apiKey())
+                    ->accept($accept)
                     ->withUserAgent('viapost-laravel/'.self::VERSION)
                     ->timeout($this->timeout)
                     ->connectTimeout($this->connectTimeout)
                     ->withoutRedirecting()
                     ->beforeSending(fn (LaravelRequest $request): RequestInterface => $this->enforceRequestBoundary(
                         $request->toPsrRequest(),
+                        $accept,
+                        $contentType ?? ($jsonBody !== null ? 'application/json' : null),
                     ));
 
                 /** @var array<string, mixed> $options */
                 $options = [
                     'cookies' => false,
-                    'on_headers' => function (ResponseInterface $response) use (&$responseTooLarge): void {
+                    'decode_content' => false,
+                    'on_headers' => function (ResponseInterface $response) use (
+                        &$activeResponseLimit,
+                        &$responseTooLargeLimit,
+                        $successfulResponseLimit,
+                    ): void {
+                        $activeResponseLimit = $response->getStatusCode() >= 200 && $response->getStatusCode() < 300
+                            ? $successfulResponseLimit
+                            : $this->maxResponseBytes;
                         if ($this->advertisedBodyExceedsLimit(
                             $response->getHeaderLine('Content-Length'),
                             $response->getHeaderLine('Content-Encoding'),
+                            $activeResponseLimit,
                         )) {
-                            $responseTooLarge = true;
+                            $responseTooLargeLimit = $activeResponseLimit;
 
-                            throw new ResponseTooLargeException($this->maxResponseBytes);
+                            throw new ResponseTooLargeException($activeResponseLimit);
                         }
                     },
-                    'progress' => function (int $downloadTotal, int $downloadedBytes, int $uploadTotal, int $uploadedBytes) use (&$responseTooLarge): void {
+                    'progress' => function (int $downloadTotal, int $downloadedBytes, int $uploadTotal, int $uploadedBytes) use (
+                        &$activeResponseLimit,
+                        &$responseTooLargeLimit,
+                    ): void {
                         unset($uploadTotal, $uploadedBytes);
 
-                        if ($downloadTotal > $this->maxResponseBytes || $downloadedBytes > $this->maxResponseBytes) {
-                            $responseTooLarge = true;
+                        if ($downloadTotal > $activeResponseLimit || $downloadedBytes > $activeResponseLimit) {
+                            $responseTooLargeLimit = $activeResponseLimit;
 
-                            throw new ResponseTooLargeException($this->maxResponseBytes);
+                            throw new ResponseTooLargeException($activeResponseLimit);
                         }
                     },
                 ];
                 if ($query !== []) {
                     $options['query'] = $query;
                 }
-                if ($body !== null) {
-                    $options['json'] = $body;
+                if ($jsonBody !== null) {
+                    $options['json'] = $jsonBody;
+                } elseif ($rawBody !== null) {
+                    $options['body'] = $rawBody;
                 }
 
                 $response = $pending->send($method, $url, $options);
             } catch (Throwable $exception) {
-                if ($responseTooLarge) {
-                    throw new ResponseTooLargeException($this->maxResponseBytes);
+                if ($responseTooLargeLimit !== null) {
+                    throw new ResponseTooLargeException($responseTooLargeLimit);
                 }
 
                 if ($exception instanceof LaravelRequestException || ! $exception instanceof LaravelConnectionException) {
@@ -227,9 +381,8 @@ final class Client
                     "Unable to connect to ViaPost while requesting {$method} {$url}.",
                 );
             }
-
             if (! ($safeToRetry && $this->isRetryable($response) && $attempt < $this->maxRetries)) {
-                return $this->decode($response, $method, $url);
+                return $response;
             }
 
             $this->waitBeforeRetry($response, $attempt);
@@ -243,6 +396,7 @@ final class Client
         if ($this->advertisedBodyExceedsLimit(
             $response->header('Content-Length'),
             $response->header('Content-Encoding'),
+            $this->maxResponseBytes,
         )) {
             throw new ResponseTooLargeException($this->maxResponseBytes);
         }
@@ -266,18 +420,26 @@ final class Client
         }
 
         if (! $response->successful()) {
+            $sensitiveValues = [$this->apiKey()];
+            $this->collectSensitiveValues($body, $sensitiveValues);
+            $this->collectSensitiveHeaderValues($response->headers(), $sensitiveValues);
+            $safeBody = $this->redactSensitiveValue($body, $sensitiveValues);
+            $safeHeaders = $this->redactSensitiveHeaders($response->headers(), $sensitiveValues);
             $requestId = $this->nonEmpty($response->header('X-Request-Id'))
                 ?? $this->nonEmpty($response->header('X-Correlation-Id'))
                 ?? $this->requestIdFromBody($body);
+            if ($requestId !== null) {
+                $requestId = $this->redactSensitiveString($requestId, $sensitiveValues);
+            }
 
             throw new ApiException(
-                $this->errorMessage($body, $response->status()),
+                $this->errorMessage($safeBody, $response->status()),
                 $response->status(),
                 $method,
                 $url,
-                $body,
+                $safeBody,
                 $requestId,
-                $response->headers(),
+                $safeHeaders,
             );
         }
 
@@ -321,22 +483,23 @@ final class Client
         return $safeHeaders;
     }
 
-    private function enforceRequestBoundary(RequestInterface $request): RequestInterface
+    private function enforceRequestBoundary(RequestInterface $request, string $accept, ?string $contentType): RequestInterface
     {
         foreach (self::PROTECTED_REQUEST_HEADERS as $header) {
             $request = $request->withoutHeader($header);
         }
 
         $request = $request
-            ->withHeader('Authorization', 'Bearer '.$this->apiKey)
-            ->withHeader('Accept', 'application/json')
+            ->withHeader('Authorization', 'Bearer '.$this->apiKey())
+            ->withHeader('Accept', $accept)
+            ->withHeader('Accept-Encoding', 'identity')
             ->withHeader('User-Agent', 'viapost-laravel/'.self::VERSION)
             ->withHeader('Host', $request->getUri()->getAuthority());
 
         $bodySize = $request->getBody()->getSize();
         if ($bodySize !== null && $bodySize > 0) {
             $request = $request
-                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Content-Type', $contentType ?? 'application/octet-stream')
                 ->withHeader('Content-Length', (string) $bodySize);
         }
 
@@ -350,7 +513,7 @@ final class Client
         }
     }
 
-    private function advertisedBodyExceedsLimit(string $contentLength, string $contentEncoding): bool
+    private function advertisedBodyExceedsLimit(string $contentLength, string $contentEncoding, int $limit): bool
     {
         foreach (explode(',', strtolower($contentEncoding)) as $encoding) {
             $encoding = trim($encoding);
@@ -363,7 +526,7 @@ final class Client
             return false;
         }
 
-        return $this->decimalExceedsLimit($contentLength, $this->maxResponseBytes);
+        return $this->decimalExceedsLimit($contentLength, $limit);
     }
 
     private function decimalExceedsLimit(string $decimal, int $limit): bool
@@ -486,6 +649,121 @@ final class Client
         return "ViaPost API request failed with status {$status}.";
     }
 
+    /** @param list<string> $sensitiveValues */
+    private function collectSensitiveValues(mixed $value, array &$sensitiveValues, ?string $key = null): void
+    {
+        if (is_array($value)) {
+            foreach ($value as $childKey => $childValue) {
+                $this->collectSensitiveValues($childValue, $sensitiveValues, is_string($childKey) ? $childKey : null);
+            }
+
+            return;
+        }
+
+        if ($key !== null && $this->isSensitiveName($key) && is_string($value) && $value !== '') {
+            $sensitiveValues[] = $value;
+        }
+    }
+
+    /**
+     * @param  array<string, list<string>>  $headers
+     * @param  list<string>  $sensitiveValues
+     */
+    private function collectSensitiveHeaderValues(array $headers, array &$sensitiveValues): void
+    {
+        foreach ($headers as $name => $values) {
+            if (! $this->isSensitiveName($name)) {
+                continue;
+            }
+            foreach ($values as $value) {
+                if ($value !== '') {
+                    $sensitiveValues[] = $value;
+                }
+            }
+        }
+    }
+
+    /** @param list<string> $sensitiveValues */
+    private function redactSensitiveValue(mixed $value, array $sensitiveValues, ?string $key = null): mixed
+    {
+        if ($key !== null && $this->isSensitiveName($key)) {
+            return '[REDACTED]';
+        }
+
+        if (is_array($value)) {
+            $safe = [];
+            foreach ($value as $childKey => $childValue) {
+                $safe[$childKey] = $this->redactSensitiveValue(
+                    $childValue,
+                    $sensitiveValues,
+                    is_string($childKey) ? $childKey : null,
+                );
+            }
+
+            return $safe;
+        }
+
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        return $this->redactSensitiveString($value, $sensitiveValues);
+    }
+
+    /**
+     * @param  array<string, list<string>>  $headers
+     * @param  list<string>  $sensitiveValues
+     * @return array<string, list<string>>
+     */
+    private function redactSensitiveHeaders(array $headers, array $sensitiveValues): array
+    {
+        $safe = [];
+        foreach ($headers as $name => $values) {
+            if ($this->isSensitiveName($name)) {
+                $safe[$name] = ['[REDACTED]'];
+
+                continue;
+            }
+            $safe[$name] = array_map(
+                fn (string $value): string => $this->redactSensitiveString($value, $sensitiveValues),
+                $values,
+            );
+        }
+
+        return $safe;
+    }
+
+    private function isSensitiveName(string $name): bool
+    {
+        $normalized = strtolower((string) preg_replace('/[^a-z0-9]/i', '', $name));
+
+        foreach (['apikey', 'secret', 'token', 'authorization', 'password', 'cookie'] as $sensitiveName) {
+            if (str_contains($normalized, $sensitiveName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<string> $sensitiveValues */
+    private function redactSensitiveString(string $value, array $sensitiveValues): string
+    {
+        $sensitiveValues = array_values(array_unique(array_filter(
+            $sensitiveValues,
+            static fn (string $sensitiveValue): bool => $sensitiveValue !== '',
+        )));
+        if ($sensitiveValues !== []) {
+            $value = str_replace($sensitiveValues, '[REDACTED]', $value);
+        }
+
+        return (string) preg_replace(
+            '/((?:api[_-]?key|secret|token|authorization|password)\s*[:=]\s*)([^\s,;]+)/i',
+            '$1[REDACTED]',
+            $value,
+        );
+    }
+
     private static function normalizeBaseUrl(string $baseUrl): string
     {
         $parts = parse_url($baseUrl);
@@ -511,6 +789,27 @@ final class Client
         }
 
         return rtrim($baseUrl, '/');
+    }
+
+    private function url(string $path): string
+    {
+        return $this->baseUrl.'/'.ltrim($path, '/');
+    }
+
+    private function apiKey(): string
+    {
+        $apiKey = self::apiKeys()[$this] ?? null;
+        if (! is_string($apiKey)) {
+            throw new LogicException('ViaPost Client credentials are unavailable.');
+        }
+
+        return $apiKey;
+    }
+
+    /** @return WeakMap<object, string> */
+    private static function apiKeys(): WeakMap
+    {
+        return self::$apiKeys ??= new WeakMap;
     }
 
     private static function isLoopback(string $host): bool

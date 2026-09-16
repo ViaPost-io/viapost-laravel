@@ -38,6 +38,7 @@ final class LaravelIntegrationTest extends TestCase
     public function test_config_is_merged_and_publishable(): void
     {
         self::assertSame('https://api.viapost.io', config('viapost.base_url'));
+        self::assertSame(40 * 1024 * 1024, config('viapost.max_raw_response_bytes'));
 
         $paths = ServiceProvider::pathsToPublish(ViaPostServiceProvider::class, 'viapost-config');
 
