@@ -314,6 +314,8 @@ final class TransportTest extends TestCase
         $apiKey = 'vp_live_must_never_be_serialized';
         $client = new Client($apiKey, http: $this->http);
 
+        self::assertStringNotContainsString($apiKey, @var_export($client, true));
+
         try {
             serialize($client);
             self::fail('Expected client serialization to be forbidden.');

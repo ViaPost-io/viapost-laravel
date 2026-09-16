@@ -29,6 +29,7 @@ use ViaPost\Laravel\Resources\SuppressionsResource;
 use ViaPost\Laravel\Resources\TemplatesResource;
 use ViaPost\Laravel\Resources\UsageResource;
 use ViaPost\Laravel\Resources\WebhooksResource;
+use WeakMap;
 
 final class Client
 {
@@ -63,7 +64,8 @@ final class Client
         'x-xsrf-token',
     ];
 
-    private readonly string $apiKey;
+    /** @var WeakMap<object, string>|null */
+    private static ?WeakMap $apiKeys = null;
 
     private readonly string $baseUrl;
 
@@ -104,7 +106,7 @@ final class Client
             throw new InvalidArgumentException('ViaPost api key must contain visible ASCII characters only.');
         }
 
-        $this->apiKey = $apiKey;
+        self::apiKeys()[$this] = $apiKey;
         $this->baseUrl = self::normalizeBaseUrl($baseUrl);
         $this->assertPositive($timeout, 'timeout');
         $this->assertPositive($connectTimeout, 'connect timeout');
@@ -305,7 +307,7 @@ final class Client
             try {
                 $pending = $this->http
                     ->withHeaders($headers)
-                    ->withToken($this->apiKey)
+                    ->withToken($this->apiKey())
                     ->accept($accept)
                     ->withUserAgent('viapost-laravel/'.self::VERSION)
                     ->timeout($this->timeout)
@@ -418,7 +420,7 @@ final class Client
         }
 
         if (! $response->successful()) {
-            $sensitiveValues = [$this->apiKey];
+            $sensitiveValues = [$this->apiKey()];
             $this->collectSensitiveValues($body, $sensitiveValues);
             $this->collectSensitiveHeaderValues($response->headers(), $sensitiveValues);
             $safeBody = $this->redactSensitiveValue($body, $sensitiveValues);
@@ -488,7 +490,7 @@ final class Client
         }
 
         $request = $request
-            ->withHeader('Authorization', 'Bearer '.$this->apiKey)
+            ->withHeader('Authorization', 'Bearer '.$this->apiKey())
             ->withHeader('Accept', $accept)
             ->withHeader('Accept-Encoding', 'identity')
             ->withHeader('User-Agent', 'viapost-laravel/'.self::VERSION)
@@ -792,6 +794,22 @@ final class Client
     private function url(string $path): string
     {
         return $this->baseUrl.'/'.ltrim($path, '/');
+    }
+
+    private function apiKey(): string
+    {
+        $apiKey = self::apiKeys()[$this] ?? null;
+        if (! is_string($apiKey)) {
+            throw new LogicException('ViaPost Client credentials are unavailable.');
+        }
+
+        return $apiKey;
+    }
+
+    /** @return WeakMap<object, string> */
+    private static function apiKeys(): WeakMap
+    {
+        return self::$apiKeys ??= new WeakMap;
     }
 
     private static function isLoopback(string $host): bool
