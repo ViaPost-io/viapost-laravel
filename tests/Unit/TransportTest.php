@@ -14,6 +14,9 @@ use Illuminate\Http\Client\ConnectionException as LaravelConnectionException;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Request;
+use Monolog\Formatter\JsonFormatter;
+use Monolog\Level;
+use Monolog\LogRecord;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\RequestInterface;
 use ViaPost\Laravel\Client;
@@ -21,6 +24,7 @@ use ViaPost\Laravel\Exceptions\ApiException;
 use ViaPost\Laravel\Exceptions\ConnectionException;
 use ViaPost\Laravel\Exceptions\ResponseTooLargeException;
 use ViaPost\Laravel\Exceptions\TimeoutException;
+use ViaPost\Laravel\Responses\WebhookSecretResponse;
 
 final class TransportTest extends TestCase
 {
@@ -44,7 +48,7 @@ final class TransportTest extends TestCase
             self::assertSame('https://example.test/api/v1/messages?status=delivered&limit=25', $request->url());
             self::assertTrue($request->hasHeader('Authorization', 'Bearer secret'));
             self::assertTrue($request->hasHeader('Accept', 'application/json'));
-            self::assertTrue($request->hasHeader('User-Agent', 'viapost-laravel/0.1.1'));
+            self::assertTrue($request->hasHeader('User-Agent', 'viapost-laravel/0.2.0'));
 
             return true;
         });
@@ -168,6 +172,7 @@ final class TransportTest extends TestCase
         $client->request('GET', '/v1/usage', headers: [
             'aUtHoRiZaTiOn' => 'Bearer attacker',
             'AcCePt' => 'text/plain',
+            'AcCePt-EnCoDiNg' => 'gzip',
             'uSeR-aGeNt' => 'attacker-client',
             'hOsT' => 'attacker.example',
             'cOnTeNt-LeNgTh' => '999',
@@ -184,7 +189,8 @@ final class TransportTest extends TestCase
         $this->http->assertSent(static function (Request $request): bool {
             self::assertSame(['Bearer protected-key'], $request->header('Authorization'));
             self::assertSame(['application/json'], $request->header('Accept'));
-            self::assertSame(['viapost-laravel/0.1.1'], $request->header('User-Agent'));
+            self::assertSame(['identity'], $request->header('Accept-Encoding'));
+            self::assertSame(['viapost-laravel/0.2.0'], $request->header('User-Agent'));
             self::assertSame(['api.viapost.io'], $request->header('Host'));
             self::assertSame([], $request->header('Content-Length'));
             self::assertSame([], $request->header('Transfer-Encoding'));
@@ -198,6 +204,18 @@ final class TransportTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_it_disables_automatic_content_decoding_before_the_response_limit_boundary(): void
+    {
+        $handler = new MockHandler([new PsrResponse(200, [], '{"ok":true}')]);
+        $http = $this->factoryUsing($handler);
+
+        self::assertSame(['ok' => true], (new Client('test', http: $http))->usage()->retrieve());
+
+        $options = $handler->getLastOptions();
+        self::assertFalse($options['decode_content'] ?? null);
+        self::assertSame('identity', $handler->getLastRequest()?->getHeaderLine('Accept-Encoding'));
     }
 
     public function test_it_never_combines_bearer_authentication_with_cookies_or_csrf_headers(): void
@@ -230,7 +248,7 @@ final class TransportTest extends TestCase
         $http->assertSent(static function (Request $request): bool {
             self::assertSame(['Bearer tenant-a-key'], $request->header('Authorization'));
             self::assertSame(['api.viapost.io'], $request->header('Host'));
-            self::assertSame(['viapost-laravel/0.1.1'], $request->header('User-Agent'));
+            self::assertSame(['viapost-laravel/0.2.0'], $request->header('User-Agent'));
             self::assertSame([], $request->header('Cookie'));
             self::assertSame([], $request->header('Set-Cookie'));
             self::assertSame([], $request->header('X-ViaPost-Csrf'));
@@ -257,6 +275,142 @@ final class TransportTest extends TestCase
             self::assertSame('https://api.viapost.io/v1/messages/missing', $exception->url);
             self::assertSame($body, $exception->body);
         }
+    }
+
+    public function test_it_redacts_api_keys_and_server_secrets_from_api_errors(): void
+    {
+        $apiKey = 'vp_live_sensitive_key';
+        $webhookSecret = 'whsec_sensitive_value';
+        $this->http->fake(['*' => Factory::response([
+            'error' => [
+                'message' => "Request using {$apiKey} failed for secret {$webhookSecret}",
+                'details' => [
+                    'api_key' => $apiKey,
+                    'secret' => $webhookSecret,
+                ],
+            ],
+        ], 400, [
+            'Authorization' => 'Bearer '.$apiKey,
+            'X-Debug-Token' => $webhookSecret,
+        ])]);
+
+        try {
+            (new Client($apiKey, http: $this->http))->usage()->retrieve();
+            self::fail('Expected an API exception.');
+        } catch (ApiException $exception) {
+            $serialized = serialize([
+                $exception->getMessage(),
+                $exception->body,
+                $exception->headers,
+            ]);
+            self::assertStringNotContainsString($apiKey, $serialized);
+            self::assertStringNotContainsString($webhookSecret, $serialized);
+            self::assertStringContainsString('[REDACTED]', $serialized);
+        }
+    }
+
+    public function test_client_serialization_is_forbidden_without_leaking_the_api_key(): void
+    {
+        $apiKey = 'vp_live_must_never_be_serialized';
+        $client = new Client($apiKey, http: $this->http);
+
+        try {
+            serialize($client);
+            self::fail('Expected client serialization to be forbidden.');
+        } catch (\LogicException $exception) {
+            self::assertStringNotContainsString($apiKey, $exception->getMessage());
+            self::assertStringContainsString('must not be serialized', $exception->getMessage());
+        }
+    }
+
+    public function test_raw_downloads_use_a_separate_limit_while_json_and_errors_keep_the_small_limit(): void
+    {
+        $this->http->fakeSequence('*')
+            ->push(str_repeat('r', 32), 200, ['Content-Type' => 'message/rfc822'])
+            ->push(['value' => str_repeat('j', 32)], 200)
+            ->push(['error' => ['message' => str_repeat('e', 32)]], 400)
+            ->push(str_repeat('r', 65), 200, ['Content-Type' => 'message/rfc822']);
+        $client = new Client('test', maxResponseBytes: 16, maxRawResponseBytes: 64, http: $this->http);
+
+        self::assertSame(str_repeat('r', 32), $client->messages()->raw('raw-ok'));
+
+        try {
+            $client->usage()->retrieve();
+            self::fail('Expected JSON response limit to remain enforced.');
+        } catch (ResponseTooLargeException $exception) {
+            self::assertStringContainsString('16 bytes', $exception->getMessage());
+        }
+
+        try {
+            $client->messages()->raw('raw-error');
+            self::fail('Expected raw endpoint errors to use the JSON/error limit.');
+        } catch (ResponseTooLargeException $exception) {
+            self::assertStringContainsString('16 bytes', $exception->getMessage());
+        }
+
+        try {
+            $client->messages()->raw('raw-too-large');
+            self::fail('Expected the raw response limit to be enforced.');
+        } catch (ResponseTooLargeException $exception) {
+            self::assertStringContainsString('64 bytes', $exception->getMessage());
+        }
+    }
+
+    public function test_raw_transfer_callbacks_use_the_large_limit_only_for_successful_responses(): void
+    {
+        $handler = new MockHandler([
+            new PsrResponse(200, ['Content-Length' => '32'], str_repeat('r', 32)),
+            new PsrResponse(400, ['Content-Length' => '32'], str_repeat('e', 32)),
+        ]);
+        $client = new Client(
+            'test',
+            maxResponseBytes: 16,
+            maxRawResponseBytes: 64,
+            http: $this->factoryUsing($handler),
+        );
+
+        self::assertSame(str_repeat('r', 32), $client->messages()->raw('raw-ok'));
+
+        $this->expectException(ResponseTooLargeException::class);
+        $this->expectExceptionMessage('16 bytes');
+        $client->messages()->raw('raw-error');
+    }
+
+    public function test_webhook_secret_responses_only_reveal_secrets_through_explicit_access(): void
+    {
+        $secret = str_repeat('s', 43);
+        $endpoint = ['id' => 'webhook-id', 'url' => 'https://example.com/hook'];
+        $this->http->fakeSequence('*')
+            ->push(['endpoint' => $endpoint, 'secret' => $secret])
+            ->push(['endpoint' => $endpoint, 'secret' => $secret, 'rotated_at' => '2026-09-16T12:00:00Z']);
+        $client = new Client('test', http: $this->http);
+
+        $created = $client->webhooks()->create([
+            'url' => 'https://example.com/hook',
+            'event_types' => ['delivered'],
+        ]);
+        $rotated = $client->webhooks()->rotateSecret('webhook-id', 'rotate-1');
+
+        foreach ([$created, $rotated] as $response) {
+            self::assertInstanceOf(WebhookSecretResponse::class, $response);
+            self::assertSame($secret, $response->secret());
+            self::assertStringNotContainsString($secret, (string) json_encode($response, JSON_THROW_ON_ERROR));
+            self::assertStringNotContainsString($secret, print_r($response, true));
+            self::assertStringNotContainsString($secret, serialize($response));
+            self::assertStringNotContainsString($secret, var_export($response, true));
+            $monologOutput = (new JsonFormatter)->format(new LogRecord(
+                new \DateTimeImmutable,
+                'test',
+                Level::Info,
+                'Webhook secret response',
+                ['response' => $response],
+            ));
+            self::assertStringNotContainsString($secret, $monologOutput);
+        }
+
+        self::assertSame($endpoint, $created->endpoint());
+        self::assertNull($created->rotatedAt());
+        self::assertSame('2026-09-16T12:00:00Z', $rotated->rotatedAt());
     }
 
     public function test_it_uses_request_id_from_the_error_body_as_fallback(): void

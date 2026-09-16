@@ -2,7 +2,53 @@
 
 declare(strict_types=1);
 
-const SNAPSHOT_SHA256 = 'd1f223342ad1ca326ba716af6e508c78594e1b108958cce2ec4a1efd31a9773a';
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
+
+const SNAPSHOT_SHA256 = 'f1b1fc0f198a2b0b36f0e893515dad191d6bb7d139fcf1e942c036bfa2f5169b';
+
+$autoload = dirname(__DIR__).'/vendor/autoload.php';
+if (! is_file($autoload)) {
+    fwrite(STDERR, "Missing Composer dependencies; run composer install before checking OpenAPI.\n");
+    exit(1);
+}
+require $autoload;
+
+function parseOpenApi(string $path): object
+{
+    try {
+        $document = Yaml::parseFile($path, Yaml::PARSE_OBJECT_FOR_MAP);
+    } catch (ParseException $exception) {
+        fwrite(STDERR, "Invalid OpenAPI YAML in {$path}: {$exception->getMessage()}\n");
+        exit(1);
+    }
+
+    if (! is_object($document)) {
+        fwrite(STDERR, "OpenAPI document must be a YAML mapping: {$path}\n");
+        exit(1);
+    }
+
+    return $document;
+}
+
+function normalizeOpenApi(mixed $value): mixed
+{
+    if (is_object($value)) {
+        $mapping = get_object_vars($value);
+        ksort($mapping, SORT_STRING);
+        foreach ($mapping as $key => $item) {
+            $mapping[$key] = normalizeOpenApi($item);
+        }
+
+        return ['__yaml_mapping__' => $mapping];
+    }
+
+    if (! is_array($value)) {
+        return $value;
+    }
+
+    return ['__yaml_sequence__' => array_map(normalizeOpenApi(...), $value)];
+}
 
 $snapshot = dirname(__DIR__).'/openapi.yaml';
 if (! is_file($snapshot)) {
@@ -16,6 +62,7 @@ if ($actual !== SNAPSHOT_SHA256) {
     exit(1);
 }
 
+$snapshotDocument = normalizeOpenApi(parseOpenApi($snapshot));
 $source = $argv[1] ?? null;
 if ($source !== null) {
     if (! is_file($source)) {
@@ -23,9 +70,9 @@ if ($source !== null) {
         exit(1);
     }
 
-    $sourceHash = hash_file('sha256', $source);
-    if ($sourceHash !== $actual) {
-        fwrite(STDERR, "OpenAPI contract drift detected: snapshot {$actual}, source {$sourceHash}\n");
+    $sourceDocument = normalizeOpenApi(parseOpenApi($source));
+    if ($sourceDocument !== $snapshotDocument) {
+        fwrite(STDERR, "OpenAPI semantic contract drift detected between snapshot and {$source}.\n");
         exit(1);
     }
 }

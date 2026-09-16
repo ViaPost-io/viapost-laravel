@@ -12,9 +12,11 @@
 5. Retry only GET/HEAD responses on 429/5xx, respecting configured bounds, and never retry mutations.
 6. Validate and send a visible-ASCII `Idempotency-Key` on `/v1/send`; normalize nullable result lists.
 7. Reject empty/dot path parameters and percent-encode every dynamic path segment.
-8. Map send, messages, domains, templates, webhooks, automations, and usage to the frozen public API.
+8. Map send, messages, inbound messages, suppressions, domains, templates, the complete webhook
+   operations, automations, and usage to the frozen public API.
 9. Auto-discover the provider, bind one client instance, merge/publish config, and expose the facade.
-10. Verify the embedded OpenAPI snapshot byte-for-byte against its recorded SHA-256.
+10. Verify the embedded OpenAPI snapshot byte-for-byte against its recorded SHA-256 and compare
+    external YAML semantically so harmless serialization differences do not report drift.
 
 ## Red → Green log / Registro Red → Green
 
@@ -67,6 +69,20 @@ cada teste focado é executado.
   final request boundary that strips protected headers injected by request arguments, global
   options, or global middleware before restoring only SDK-controlled authentication and protocol
   headers.
+- RED 12 — the new resource/contract/version tests produced one missing-method error and six
+  failures: authenticated raw/inbound/suppression/webhook operations were absent, the bundled
+  contract and User-Agent were stale, byte comparison rejected equivalent YAML, and the scheduled
+  workflow still depended on the private monorepo URL.
+- GREEN 12 — the focused suite passed with 29 tests and 132 assertions after adding binary/CSV
+  transport, the missing authenticated resources, semantic YAML normalization, the public contract
+  endpoint, and the `0.2.0` User-Agent. The full suite then passed with 48 tests and 169 assertions.
+- RED 13 — focused contract/security tests exposed permissive webhook and suppression payloads,
+  unsafe webhook destinations, secret-bearing array responses and API exceptions, a shared raw/JSON
+  response limit, pre-attestation release publication, and weak contract-download redirect bounds.
+- GREEN 13 — the focused tests passed after strict local validation, a redacted
+  `WebhookSecretResponse`, separate 40 MiB raw limits, recursive error redaction, HTTPS-only bounded
+  contract downloads, and draft release publication gated by build provenance attestation. The
+  complete suite passed with 55 tests and 241 assertions.
 
 ## Refactor and final verification / Refatoração e verificação final
 
@@ -74,13 +90,14 @@ After all behaviors were green, common path validation moved to `Resource`, HTTP
 centralized in `Client`, repeated endpoint prefixes were extracted inside the larger resources, and
 the suite stayed green after each formatting/static-analysis pass.
 
-- Local PHP 8.5 + Laravel 11 + Testbench 9 + PHPUnit 11: 42 tests, 119 assertions (two upstream
-  deprecations).
-- Local PHP 8.5 + Laravel 12 + Testbench 10 + PHPUnit 11: 42 tests, 119 assertions.
-- Local PHP 8.5 + Laravel 13 + Testbench 11 + PHPUnit 12: 42 tests, 119 assertions. CI defines the
-  minimum-runtime matrix on PHP 8.2/8.3.
+- Local PHP 8.2 + Laravel 11 + Testbench 9 + PHPUnit 11: 55 tests, 241 assertions.
+- Local PHP 8.2 + Laravel 12 + Testbench 10 + PHPUnit 11: 55 tests, 241 assertions.
+- Local PHP 8.3 + Laravel 13 + Testbench 11 + PHPUnit 12: 55 tests, 241 assertions.
 - PHPStan level 9: no errors. Pint: clean. Composer validate: valid. Composer audit on the current
   secure dependency set: no advisories.
+- The current public and source OpenAPI serializations have different byte hashes but both pass the
+  semantic verifier against the bundled snapshot; an intentional title change fails with
+  `OpenAPI semantic contract drift detected`.
 - Local coverage was unavailable because no coverage driver is installed. CI explicitly provisions
   Xdebug and runs the coverage command.
 

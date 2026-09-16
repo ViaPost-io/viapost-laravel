@@ -83,4 +83,38 @@ final class ConfigurationTest extends TestCase
 
         new Client(apiKey: 'test', timeout: 0);
     }
+
+    public function test_it_rejects_a_non_positive_raw_response_limit(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new Client(apiKey: 'test', maxRawResponseBytes: 0);
+    }
+
+    public function test_it_rejects_an_unbounded_raw_response_limit(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new Client(apiKey: 'test', maxRawResponseBytes: (128 * 1024 * 1024) + 1);
+    }
+
+    public function test_it_rejects_an_unbounded_json_response_limit(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new Client(apiKey: 'test', maxResponseBytes: (64 * 1024 * 1024) + 1);
+    }
+
+    public function test_debug_output_never_contains_the_api_key(): void
+    {
+        $client = new Client(apiKey: 'synthetic-secret-api-key');
+
+        ob_start();
+        var_dump($client);
+        $debug = ob_get_clean();
+
+        self::assertIsString($debug);
+        self::assertStringNotContainsString('synthetic-secret-api-key', $debug);
+        self::assertStringContainsString('[REDACTED]', $debug);
+    }
 }

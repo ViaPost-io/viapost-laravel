@@ -5,6 +5,24 @@ versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-16
+
+### Added
+
+- Add inbound-message downloads, suppression management/import/export, and the complete authenticated webhook operation surface.
+- Add an explicitly accessed, log-safe response object for one-time webhook secrets.
+
+### Changed
+
+- Refresh the bundled OpenAPI contract and compare scheduled snapshots semantically against the public documentation endpoint.
+- Enforce the public webhook and suppression mutation constraints before network I/O and allow raw RFC 5322 downloads up to 40 MiB without increasing JSON/error limits.
+- Publish releases only after verification and provenance attestation, using immutable assets on a draft release.
+
+### Fixed
+
+- Remove the scheduled contract check's dependency on the private monorepo.
+- Redact API keys and echoed server secrets from typed API error context.
+
 ## [0.1.1] - 2026-09-11
 
 ### Fixed

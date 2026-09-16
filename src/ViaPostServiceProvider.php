@@ -29,6 +29,7 @@ final class ViaPostServiceProvider extends ServiceProvider
                 maxRetries: self::intConfig($retry, 'max_retries', 2),
                 retryBaseDelayMs: self::intConfig($retry, 'base_delay_ms', 250),
                 retryMaxDelayMs: self::intConfig($retry, 'max_delay_ms', 30_000),
+                maxRawResponseBytes: self::intConfig($config, 'max_raw_response_bytes', 40 * 1024 * 1024),
                 http: $app->make(Factory::class),
             );
         });

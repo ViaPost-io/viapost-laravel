@@ -1,8 +1,14 @@
-name: Verify GitHub release
+name: Build, attest, and publish release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed tag to release
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -10,12 +16,25 @@ permissions:
 jobs:
   verify-and-archive:
     runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event_name == 'push' && github.sha || inputs.tag }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Freeze verified source commit
+        id: source
+        env:
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          SOURCE_SHA=$(git rev-parse HEAD)
+          if [[ "${{ github.event_name }}" == "push" && "$SOURCE_SHA" != "$EVENT_SHA" ]]; then
+            echo "checked out source does not match the event SHA" >&2
+            exit 1
+          fi
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: "8.3"
@@ -23,13 +42,16 @@ jobs:
           tools: composer:2.10.3
       - run: git fetch --no-tags origin main
       - run: git merge-base --is-ancestor HEAD origin/main
-      - run: php scripts/check-release-tag.php "${{ github.event.release.tag_name }}"
+      - name: Verify release tag matches the SDK version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: php scripts/check-release-tag.php "$RELEASE_TAG"
       - run: composer install --prefer-dist --no-interaction
       - run: composer check
       - run: composer audit --locked
       - name: Build release archive
         env:
-          COMPOSER_ROOT_VERSION: ${{ github.event.release.tag_name }}
+          COMPOSER_ROOT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: composer archive --format=zip --file=viapost-laravel-sdk
       - name: Checksum release archive
         run: sha256sum viapost-laravel-sdk.zip > viapost-laravel-sdk.zip.sha256
@@ -42,23 +64,28 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  attach-to-github-release:
-    needs: verify-and-archive
+  create-draft-release:
+    needs: [verify-and-archive, attest-build-provenance]
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify-and-archive.outputs.source_sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: composer-package
           path: dist
-      - name: Attach Composer archive and checksum
+      - name: Prepare or validate the exact draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" dist/* --clobber
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          SOURCE_SHA: ${{ needs.verify-and-archive.outputs.source_sha }}
+        run: bash scripts/publish-release.sh prepare "$RELEASE_TAG" "$SOURCE_SHA" dist/*
 
   attest-build-provenance:
     needs: verify-and-archive
@@ -76,3 +103,25 @@ jobs:
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/viapost-laravel-sdk.zip
+
+  publish-github-release:
+    needs: [verify-and-archive, create-draft-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify-and-archive.outputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: composer-package
+          path: dist
+      - name: Publish only after provenance attestation succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          SOURCE_SHA: ${{ needs.verify-and-archive.outputs.source_sha }}
+        run: bash scripts/publish-release.sh publish "$RELEASE_TAG" "$SOURCE_SHA" dist/*
