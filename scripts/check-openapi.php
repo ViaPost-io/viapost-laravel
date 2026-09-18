@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
-const SNAPSHOT_SHA256 = 'f1b1fc0f198a2b0b36f0e893515dad191d6bb7d139fcf1e942c036bfa2f5169b';
+const SNAPSHOT_SHA256 = 'c5d5ae1d85e61b4e14e09351b14146465ce357075d2ed5fe4e034f6ff6693dc1';
 
 $autoload = dirname(__DIR__).'/vendor/autoload.php';
 if (! is_file($autoload)) {
