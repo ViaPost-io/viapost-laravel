@@ -1,6 +1,6 @@
 # Security Policy / Política de Segurança
 
-Supported security fixes target the latest `0.2.x` release while the SDK is in beta.
+Supported security fixes target the latest `0.3.x` release while the SDK is in beta.
 
 Report vulnerabilities privately through GitHub Security Advisories for
 `ViaPost-io/viapost-laravel`. Do not open a public issue and do not include live API keys, message

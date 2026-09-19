@@ -45,6 +45,20 @@ final readonly class DomainsResource extends Resource
     }
 
     /** @return array<string, mixed> */
+    public function health(string $domainId): array
+    {
+        /** @var array<string, mixed> */
+        return $this->client->request('GET', '/v1/domains/'.$this->pathParam('domainId', $domainId).'/health');
+    }
+
+    /** @return array<string, mixed> */
+    public function inbound(string $domainId): array
+    {
+        /** @var array<string, mixed> */
+        return $this->client->request('GET', '/v1/domains/'.$this->pathParam('domainId', $domainId).'/inbound');
+    }
+
+    /** @return array<string, mixed> */
     public function verify(string $domainId): array
     {
         /** @var array<string, mixed> */

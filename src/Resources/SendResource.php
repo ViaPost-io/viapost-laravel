@@ -28,10 +28,62 @@ final readonly class SendResource extends Resource
         return $result;
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public function batch(array $input): array
+    {
+        if (array_diff(array_keys($input), ['messages']) !== []) {
+            throw new InvalidArgumentException('ViaPost batch send contains unsupported properties.');
+        }
+        $messages = $input['messages'] ?? null;
+        if (! is_array($messages) || ! array_is_list($messages) || count($messages) < 1 || count($messages) > 100) {
+            throw new InvalidArgumentException('ViaPost batch send messages must contain between 1 and 100 items.');
+        }
+        foreach ($messages as $message) {
+            if (! is_array($message)) {
+                throw new InvalidArgumentException('ViaPost batch send items must be objects.');
+            }
+            $this->assertObject($message, 'item');
+            if (array_diff(array_keys($message), ['idempotency_key', 'request']) !== []) {
+                throw new InvalidArgumentException('ViaPost batch send items must contain only idempotency_key and request.');
+            }
+            $idempotencyKey = $message['idempotency_key'] ?? null;
+            if (! is_string($idempotencyKey)) {
+                throw new InvalidArgumentException('ViaPost batch send item idempotency_key must be a string.');
+            }
+            $this->validateIdempotencyKey($idempotencyKey);
+            $request = $message['request'] ?? null;
+            if (! is_array($request)) {
+                throw new InvalidArgumentException('ViaPost batch send item request must be an object.');
+            }
+            $this->assertObject($request, 'item request');
+            $this->validateInput($request);
+        }
+
+        /** @var array<string, mixed> */
+        return $this->client->request('POST', '/v1/send/batch', body: $input);
+    }
+
     private function validateIdempotencyKey(string $value): void
     {
         if (preg_match('/\A[\x21-\x7E]{1,255}\z/D', $value) !== 1) {
             throw new InvalidArgumentException('ViaPost idempotency key must contain between 1 and 255 visible ASCII characters.');
+        }
+    }
+
+    /**
+     * @param  array<mixed>  $value
+     *
+     * @phpstan-assert array<string, mixed> $value
+     */
+    private function assertObject(array $value, string $field): void
+    {
+        foreach ($value as $key => $_) {
+            if (! is_string($key)) {
+                throw new InvalidArgumentException("ViaPost batch send {$field} must be an object.");
+            }
         }
     }
 
