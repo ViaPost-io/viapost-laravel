@@ -83,6 +83,11 @@ cada teste focado é executado.
   `WebhookSecretResponse`, separate 40 MiB raw limits, recursive error redaction, HTTPS-only bounded
   contract downloads, and draft release publication gated by build provenance attestation. The
   complete suite passed with 55 tests and 241 assertions.
+- RED 14 — the synchronized public snapshot exposed seven Laravel SDK operations without an
+  idiomatic resource method; focused HTTP resource tests failed at the missing accessors.
+- GREEN 14 — the focused resource suite passed after adding contact CSV import, domain health and
+  inbound reads, message timeline and cancellation, segment previews, and batch sends with their
+  critical local payload bounds.
 
 ## Refactor and final verification / Refatoração e verificação final
 

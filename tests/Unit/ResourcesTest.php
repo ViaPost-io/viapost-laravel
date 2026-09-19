@@ -38,10 +38,17 @@ final class ResourcesTest extends TestCase
         $body = ['name' => 'example'];
 
         $this->client->send()->create(['from' => 'hello@example.com', 'to' => ['person@example.com']]);
+        $this->client->send()->batch(['messages' => [[
+            'idempotency_key' => 'batch-1',
+            'request' => ['from' => 'hello@example.com', 'to' => ['person@example.com']],
+        ]]]);
+        $this->client->contacts()->import("email,first_name,last_name,subscribed,properties\n");
         $this->client->messages()->list();
         $this->client->messages()->retrieve('m/id');
         $this->client->messages()->raw('m/id');
         $this->client->messages()->events('m/id');
+        $this->client->messages()->timeline();
+        $this->client->messages()->cancel('m/id');
         $this->client->messages()->engagement();
         $this->client->messages()->metrics();
         $this->client->messages()->timeseries();
@@ -50,8 +57,11 @@ final class ResourcesTest extends TestCase
         $this->client->domains()->retrieve('d/id');
         $this->client->domains()->delete('d/id');
         $this->client->domains()->dns('d/id');
+        $this->client->domains()->health('d/id');
+        $this->client->domains()->inbound('d/id');
         $this->client->domains()->verify('d/id');
         $this->client->domains()->rotateDkim('d/id');
+        $this->client->segments()->preview(['definition' => ['all' => [['field' => 'subscribed']]]]);
         $this->client->templates()->list();
         $this->client->templates()->create($body);
         $this->client->templates()->retrieve('t/id');
@@ -103,10 +113,14 @@ final class ResourcesTest extends TestCase
 
         self::assertSame([
             ['POST', '/v1/send'],
+            ['POST', '/v1/send/batch'],
+            ['POST', '/v1/contacts/import'],
             ['GET', '/v1/messages'],
             ['GET', '/v1/messages/m%2Fid'],
             ['GET', '/v1/messages/m%2Fid/raw'],
             ['GET', '/v1/messages/m%2Fid/events'],
+            ['GET', '/v1/messages/events'],
+            ['POST', '/v1/messages/m%2Fid/cancel'],
             ['GET', '/v1/messages/engagement'],
             ['GET', '/v1/messages/metrics'],
             ['GET', '/v1/messages/timeseries'],
@@ -115,8 +129,11 @@ final class ResourcesTest extends TestCase
             ['GET', '/v1/domains/d%2Fid'],
             ['DELETE', '/v1/domains/d%2Fid'],
             ['GET', '/v1/domains/d%2Fid/dns'],
+            ['GET', '/v1/domains/d%2Fid/health'],
+            ['GET', '/v1/domains/d%2Fid/inbound'],
             ['POST', '/v1/domains/d%2Fid/verify'],
             ['POST', '/v1/domains/d%2Fid/dkim/rotate'],
+            ['POST', '/v1/segments/preview'],
             ['GET', '/v1/templates'],
             ['POST', '/v1/templates'],
             ['GET', '/v1/templates/t%2Fid'],
@@ -176,6 +193,48 @@ final class ResourcesTest extends TestCase
 
         self::assertSame([], $result['accepted']);
         self::assertSame([], $result['rejected']);
+    }
+
+    public function test_it_sends_the_new_public_contract_endpoints_with_their_expected_payloads(): void
+    {
+        $csv = "email,first_name,last_name,subscribed,properties\nuser@example.com,Ada,Lovelace,true,{}\n";
+        $requests = [];
+        $http = new Factory;
+        $http->preventStrayRequests();
+        $http->fake(function (Request $request) use (&$requests) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            $requests[] = [$request->method(), $path, $request->body()];
+
+            return Factory::response(['path' => $path]);
+        });
+        $client = new Client('test', http: $http);
+
+        self::assertSame(['path' => '/v1/contacts/import'], $client->contacts()->import($csv));
+        self::assertSame(['path' => '/v1/domains/domain/health'], $client->domains()->health('domain'));
+        self::assertSame(['path' => '/v1/domains/domain/inbound'], $client->domains()->inbound('domain'));
+        self::assertSame(['path' => '/v1/messages/events'], $client->messages()->timeline(['period' => '7d', 'limit' => 10]));
+        self::assertSame(['path' => '/v1/messages/message/cancel'], $client->messages()->cancel('message'));
+        self::assertSame(
+            ['path' => '/v1/segments/preview'],
+            $client->segments()->preview(['definition' => ['all' => [['field' => 'subscribed', 'operator' => 'eq', 'value' => true]]]]),
+        );
+        self::assertSame(
+            ['path' => '/v1/send/batch'],
+            $client->send()->batch(['messages' => [[
+                'idempotency_key' => 'batch-1',
+                'request' => ['from' => 'hello@example.com', 'to' => ['person@example.com']],
+            ]]]),
+        );
+
+        self::assertSame([
+            ['POST', '/v1/contacts/import', $csv],
+            ['GET', '/v1/domains/domain/health', ''],
+            ['GET', '/v1/domains/domain/inbound', ''],
+            ['GET', '/v1/messages/events', ''],
+            ['POST', '/v1/messages/message/cancel', ''],
+            ['POST', '/v1/segments/preview', '{"definition":{"all":[{"field":"subscribed","operator":"eq","value":true}]}}'],
+            ['POST', '/v1/send/batch', '{"messages":[{"idempotency_key":"batch-1","request":{"from":"hello@example.com","to":["person@example.com"]}}]}'],
+        ], $requests);
     }
 
     public function test_raw_downloads_preserve_bytes_and_request_the_contract_media_type(): void
@@ -288,6 +347,13 @@ final class ResourcesTest extends TestCase
             fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 1, 'max_attempts' => 21]),
             fn () => $this->client->webhooks()->test('webhook', 'contains space'),
             fn () => $this->client->suppressions()->import(str_repeat('x', 2_097_153)),
+            fn () => $this->client->contacts()->import(str_repeat('x', 2_097_153)),
+            fn () => $this->client->segments()->preview([]),
+            fn () => $this->client->segments()->preview(['definition' => [], 'limit' => 0]),
+            fn () => $this->client->send()->batch([]),
+            fn () => $this->client->send()->batch(['messages' => []]),
+            fn () => $this->client->send()->batch(['messages' => array_fill(0, 101, [])]),
+            fn () => $this->client->send()->batch(['messages' => [['idempotency_key' => 'invalid key', 'request' => ['from' => 'a', 'to' => ['b']]]]]),
             fn () => $this->client->suppressions()->release('suppression', []),
             fn () => $this->client->suppressions()->release('suppression', ['expected_version' => 0, 'acknowledge' => true, 'justification' => 'Justificativa válida.']),
             fn () => $this->client->suppressions()->release('suppression', ['expected_version' => 1, 'acknowledge' => false, 'justification' => 'Justificativa válida.']),
