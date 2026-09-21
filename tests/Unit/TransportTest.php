@@ -48,7 +48,7 @@ final class TransportTest extends TestCase
             self::assertSame('https://example.test/api/v1/messages?status=delivered&limit=25', $request->url());
             self::assertTrue($request->hasHeader('Authorization', 'Bearer secret'));
             self::assertTrue($request->hasHeader('Accept', 'application/json'));
-            self::assertTrue($request->hasHeader('User-Agent', 'viapost-laravel/0.2.0'));
+            self::assertTrue($request->hasHeader('User-Agent', 'viapost-laravel/0.3.0'));
 
             return true;
         });
@@ -190,7 +190,7 @@ final class TransportTest extends TestCase
             self::assertSame(['Bearer protected-key'], $request->header('Authorization'));
             self::assertSame(['application/json'], $request->header('Accept'));
             self::assertSame(['identity'], $request->header('Accept-Encoding'));
-            self::assertSame(['viapost-laravel/0.2.0'], $request->header('User-Agent'));
+            self::assertSame(['viapost-laravel/0.3.0'], $request->header('User-Agent'));
             self::assertSame(['api.viapost.io'], $request->header('Host'));
             self::assertSame([], $request->header('Content-Length'));
             self::assertSame([], $request->header('Transfer-Encoding'));
@@ -248,7 +248,7 @@ final class TransportTest extends TestCase
         $http->assertSent(static function (Request $request): bool {
             self::assertSame(['Bearer tenant-a-key'], $request->header('Authorization'));
             self::assertSame(['api.viapost.io'], $request->header('Host'));
-            self::assertSame(['viapost-laravel/0.2.0'], $request->header('User-Agent'));
+            self::assertSame(['viapost-laravel/0.3.0'], $request->header('User-Agent'));
             self::assertSame([], $request->header('Cookie'));
             self::assertSame([], $request->header('Set-Cookie'));
             self::assertSame([], $request->header('X-ViaPost-Csrf'));

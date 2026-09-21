@@ -11,7 +11,7 @@ SDK oficial server-side para a API ViaPost, com integração nativa ao Laravel 1
 
 Requer PHP 8.2 ou superior.
 
-> Beta `0.2.x`: mantenha a versão fixada e consulte o changelog antes de atualizar.
+> Beta `0.3.x`: mantenha a versão fixada e consulte o changelog antes de atualizar.
 
 ## Instalação pelo GitHub
 
@@ -20,7 +20,7 @@ repositório VCS:
 
 ```bash
 composer config repositories.viapost vcs https://github.com/ViaPost-io/viapost-laravel
-composer require viapost/laravel-sdk:^0.2
+composer require viapost/laravel-sdk:^0.3
 ```
 
 Quando o pacote for cadastrado no Packagist, somente o segundo comando será necessário. O Laravel
@@ -86,8 +86,8 @@ final class SendReceipt
 }
 ```
 
-Recursos disponíveis: `send`, `messages`, `inboundMessages`, `suppressions`, `domains`,
-`templates`, `webhooks`, `automations` e `usage`. Os métodos e payloads correspondem ao snapshot
+Recursos disponíveis: `send`, `contacts`, `messages`, `inboundMessages`, `suppressions`, `domains`,
+`segments`, `templates`, `webhooks`, `automations` e `usage`. Os métodos e payloads correspondem ao snapshot
 `openapi.yaml` incluído no pacote. Downloads RFC 5322, importação/exportação CSV de supressões,
 entregas/replay/teste/rotação de webhooks e controle otimista de endpoints estão disponíveis nos
 respectivos recursos.
@@ -132,14 +132,14 @@ Install directly from public GitHub tags until Packagist is configured:
 
 ```bash
 composer config repositories.viapost vcs https://github.com/ViaPost-io/viapost-laravel
-composer require viapost/laravel-sdk:^0.2
+composer require viapost/laravel-sdk:^0.3
 ```
 
 Set `VIAPOST_API_KEY` in your server-side environment. Laravel auto-discovers the provider and
 facade; publish optional configuration with `php artisan vendor:publish --tag=viapost-config`.
 
-The client exposes `send`, `messages`, `inboundMessages`, `suppressions`, `domains`, `templates`,
-`webhooks`, `automations`, and `usage`, matching the bundled OpenAPI snapshot. See the Portuguese
+The client exposes `send`, `contacts`, `messages`, `inboundMessages`, `suppressions`, `domains`,
+`segments`, `templates`, `webhooks`, `automations`, and `usage`, matching the bundled OpenAPI snapshot. See the Portuguese
 examples above—the API is the same in either language. During the beta, payloads and responses
 remain idiomatic associative arrays, except one-time webhook secret responses, whose secret is
 available only through the explicit `secret()` accessor and is omitted from JSON/debug/log output.

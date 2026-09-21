@@ -83,6 +83,15 @@ cada teste focado é executado.
   `WebhookSecretResponse`, separate 40 MiB raw limits, recursive error redaction, HTTPS-only bounded
   contract downloads, and draft release publication gated by build provenance attestation. The
   complete suite passed with 55 tests and 241 assertions.
+- RED 14 — the synchronized public snapshot exposed seven Laravel SDK operations without an
+  idiomatic resource method; focused HTTP resource tests failed at the missing accessors.
+- GREEN 14 — the focused resource suite passed after adding contact CSV import, domain health and
+  inbound reads, message timeline and cancellation, segment previews, and batch sends with their
+  critical local payload bounds.
+- RED 15 — the release-documentation guard found stale `0.2.x` support/install references after
+  the SDK version advanced to `0.3.0`.
+- GREEN 15 — the guard passed after aligning both README install commands, the beta/support policy,
+  and the dated `0.3.0` changelog entry.
 
 ## Refactor and final verification / Refatoração e verificação final
 
@@ -90,11 +99,10 @@ After all behaviors were green, common path validation moved to `Resource`, HTTP
 centralized in `Client`, repeated endpoint prefixes were extracted inside the larger resources, and
 the suite stayed green after each formatting/static-analysis pass.
 
-- Local PHP 8.2 + Laravel 11 + Testbench 9 + PHPUnit 11: 55 tests, 241 assertions.
-- Local PHP 8.2 + Laravel 12 + Testbench 10 + PHPUnit 11: 55 tests, 241 assertions.
-- Local PHP 8.3 + Laravel 13 + Testbench 11 + PHPUnit 12: 55 tests, 241 assertions.
-- PHPStan level 9: no errors. Pint: clean. Composer validate: valid. Composer audit on the current
-  secure dependency set: no advisories.
+- Local PHP 8.5 + Laravel 13 + Testbench 11 + PHPUnit 12: `composer check` passed with 70 tests
+  and 296 assertions; Composer validation, Pint, PHPStan level 9, and the OpenAPI snapshot check
+  also passed.
+- `composer audit`: no security vulnerability advisories found.
 - The current public and source OpenAPI serializations have different byte hashes but both pass the
   semantic verifier against the bundled snapshot; an intentional title change fails with
   `OpenAPI semantic contract drift detected`.

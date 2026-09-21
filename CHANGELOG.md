@@ -5,6 +5,12 @@ versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-18
+
+### Added
+
+- Add contact CSV imports, domain health/inbound reads, message timeline/cancellation, segment previews, and batch sends to the Laravel SDK.
+
 ## [0.2.0] - 2026-09-16
 
 ### Added

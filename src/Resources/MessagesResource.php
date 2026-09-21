@@ -43,6 +43,23 @@ final readonly class MessagesResource extends Resource
      * @param  array<string, scalar|list<scalar>|null>  $query
      * @return array<string, mixed>
      */
+    public function timeline(array $query = []): array
+    {
+        /** @var array<string, mixed> */
+        return $this->client->request('GET', '/v1/messages/events', query: $query);
+    }
+
+    /** @return array<string, mixed> */
+    public function cancel(string $messageId): array
+    {
+        /** @var array<string, mixed> */
+        return $this->client->request('POST', '/v1/messages/'.$this->pathParam('messageId', $messageId).'/cancel');
+    }
+
+    /**
+     * @param  array<string, scalar|list<scalar>|null>  $query
+     * @return array<string, mixed>
+     */
     public function engagement(array $query = []): array
     {
         /** @var array<string, mixed> */
