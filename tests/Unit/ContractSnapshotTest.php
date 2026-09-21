@@ -14,9 +14,24 @@ final class ContractSnapshotTest extends TestCase
 
         self::assertFileExists($snapshot);
         self::assertSame(
-            'c5d5ae1d85e61b4e14e09351b14146465ce357075d2ed5fe4e034f6ff6693dc1',
+            '4296cf369c8a2b1e27f215fddc36dbafb4203aa35c509095df1048243b8da847',
             hash_file('sha256', $snapshot),
         );
+    }
+
+    public function test_the_current_contract_includes_the_new_public_endpoint_families(): void
+    {
+        $contract = file_get_contents(dirname(__DIR__, 2).'/openapi.yaml');
+        self::assertIsString($contract);
+
+        foreach ([
+            '/v1/contacts/import:',
+            '/v1/domains/{domain_id}/tracking-domains:',
+            '/v1/segments:',
+            '/v1/segments/preview:',
+        ] as $path) {
+            self::assertStringContainsString($path, $contract);
+        }
     }
 
     public function test_the_contract_checker_accepts_equivalent_yaml_serialization_and_rejects_semantic_drift(): void

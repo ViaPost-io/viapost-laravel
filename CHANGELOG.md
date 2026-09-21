@@ -5,6 +5,10 @@ versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh the bundled OpenAPI contract to the published public specification, including the tracking-domain API surface. High-level tracking-domain resource methods are not introduced in this release.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
