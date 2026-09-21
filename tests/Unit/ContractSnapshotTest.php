@@ -28,7 +28,7 @@ final class ContractSnapshotTest extends TestCase
             '/v1/contacts/import:',
             '/v1/domains/{domain_id}/tracking-domains:',
             '/v1/segments:',
-            '/v1/broadcasts:',
+            '/v1/segments/preview:',
         ] as $path) {
             self::assertStringContainsString($path, $contract);
         }
