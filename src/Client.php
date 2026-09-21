@@ -33,7 +33,7 @@ use WeakMap;
 
 final class Client
 {
-    public const VERSION = '0.2.0';
+    public const VERSION = '0.2.1';
 
     private const MAX_JSON_RESPONSE_BYTES = 67_108_864;
 

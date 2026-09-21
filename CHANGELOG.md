@@ -5,6 +5,15 @@ versioning.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-21
+
+### Changed
+
+- Synchronize the exact bundled OpenAPI 3.1 contract with the currently published public API,
+  including contacts import, tracking domains, audience segments, inbound configuration, and
+  broadcast foundations. This release does not claim high-level resource methods that the SDK has
+  not implemented yet.
+
 ## [0.2.0] - 2026-09-16
 
 ### Added
