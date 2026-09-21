@@ -21,9 +21,11 @@ use ViaPost\Laravel\Exceptions\ResponseTooLargeException;
 use ViaPost\Laravel\Exceptions\TimeoutException;
 use ViaPost\Laravel\Exceptions\UnexpectedResponseException;
 use ViaPost\Laravel\Resources\AutomationsResource;
+use ViaPost\Laravel\Resources\ContactsResource;
 use ViaPost\Laravel\Resources\DomainsResource;
 use ViaPost\Laravel\Resources\InboundMessagesResource;
 use ViaPost\Laravel\Resources\MessagesResource;
+use ViaPost\Laravel\Resources\SegmentsResource;
 use ViaPost\Laravel\Resources\SendResource;
 use ViaPost\Laravel\Resources\SuppressionsResource;
 use ViaPost\Laravel\Resources\TemplatesResource;
@@ -33,7 +35,7 @@ use WeakMap;
 
 final class Client
 {
-    public const VERSION = '0.2.1';
+    public const VERSION = '0.3.0';
 
     private const MAX_JSON_RESPONSE_BYTES = 67_108_864;
 
@@ -73,6 +75,8 @@ final class Client
 
     private readonly SendResource $sendResource;
 
+    private readonly ContactsResource $contactsResource;
+
     private readonly MessagesResource $messagesResource;
 
     private readonly InboundMessagesResource $inboundMessagesResource;
@@ -80,6 +84,8 @@ final class Client
     private readonly SuppressionsResource $suppressionsResource;
 
     private readonly DomainsResource $domainsResource;
+
+    private readonly SegmentsResource $segmentsResource;
 
     private readonly TemplatesResource $templatesResource;
 
@@ -123,10 +129,12 @@ final class Client
         $this->assertNonNegative($retryMaxDelayMs, 'retry maximum delay');
         $this->http = $http ?? new Factory;
         $this->sendResource = new SendResource($this);
+        $this->contactsResource = new ContactsResource($this);
         $this->messagesResource = new MessagesResource($this);
         $this->inboundMessagesResource = new InboundMessagesResource($this);
         $this->suppressionsResource = new SuppressionsResource($this);
         $this->domainsResource = new DomainsResource($this);
+        $this->segmentsResource = new SegmentsResource($this);
         $this->templatesResource = new TemplatesResource($this);
         $this->webhooksResource = new WebhooksResource($this);
         $this->automationsResource = new AutomationsResource($this);
@@ -158,6 +166,11 @@ final class Client
         return $this->sendResource;
     }
 
+    public function contacts(): ContactsResource
+    {
+        return $this->contactsResource;
+    }
+
     public function messages(): MessagesResource
     {
         return $this->messagesResource;
@@ -176,6 +189,11 @@ final class Client
     public function domains(): DomainsResource
     {
         return $this->domainsResource;
+    }
+
+    public function segments(): SegmentsResource
+    {
+        return $this->segmentsResource;
     }
 
     public function templates(): TemplatesResource

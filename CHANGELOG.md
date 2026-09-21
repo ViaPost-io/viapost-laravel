@@ -5,14 +5,11 @@ versioning.
 
 ## [Unreleased]
 
-## [0.2.1] - 2026-09-21
+## [0.3.0] - 2026-09-18
 
-### Changed
+### Added
 
-- Synchronize the exact bundled OpenAPI 3.1 contract with the currently published public API,
-  including contacts import, tracking domains, audience segments, inbound configuration, and
-  broadcast foundations. This release does not claim high-level resource methods that the SDK has
-  not implemented yet.
+- Add contact CSV imports, domain health/inbound reads, message timeline/cancellation, segment previews, and batch sends to the Laravel SDK.
 
 ## [0.2.0] - 2026-09-16
 
