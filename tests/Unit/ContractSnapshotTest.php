@@ -14,7 +14,7 @@ final class ContractSnapshotTest extends TestCase
 
         self::assertFileExists($snapshot);
         self::assertSame(
-            '4296cf369c8a2b1e27f215fddc36dbafb4203aa35c509095df1048243b8da847',
+            '7c931b5a4a2a602d3c42341f2a70af9c49378600894b31adebfd333469b9e183',
             hash_file('sha256', $snapshot),
         );
     }
@@ -29,6 +29,9 @@ final class ContractSnapshotTest extends TestCase
             '/v1/domains/{domain_id}/tracking-domains:',
             '/v1/segments:',
             '/v1/segments/preview:',
+            'name: Idempotency-Key',
+            'deliverability:',
+            'payload:',
         ] as $path) {
             self::assertStringContainsString($path, $contract);
         }
