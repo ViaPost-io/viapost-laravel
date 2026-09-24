@@ -9,8 +9,9 @@ SDK oficial server-side para a API ViaPost, com integração nativa ao Laravel 1
 
 Requer PHP 8.2 ou superior.
 
-> Próxima major `0.4.x`: migre de Laravel 11 para Laravel 12 antes de atualizar e consulte o
-> changelog para as mudanças incompatíveis.
+> A versão publicada mais recente é a `0.3.x`. A `0.4.0` ainda não foi publicada: migre de
+> Laravel 11 para Laravel 12 antes de adotá-la e consulte o changelog para as mudanças
+> incompatíveis.
 
 ## Instalação pelo GitHub
 
@@ -19,7 +20,7 @@ repositório VCS:
 
 ```bash
 composer config repositories.viapost vcs https://github.com/ViaPost-io/viapost-laravel
-composer require viapost/laravel-sdk:^0.4
+composer require viapost/laravel-sdk:^0.3
 ```
 
 Quando o pacote for cadastrado no Packagist, somente o segundo comando será necessário. O Laravel
@@ -125,11 +126,14 @@ Official server-side SDK for the ViaPost API with native Laravel 12 and 13 integ
 
 Requires PHP 8.2 or newer.
 
+> The latest published version is `0.3.x`. Version `0.4.0` has not been published yet; upgrade
+> from Laravel 11 to Laravel 12 before adopting it and consult the changelog for breaking changes.
+
 Install directly from public GitHub tags until Packagist is configured:
 
 ```bash
 composer config repositories.viapost vcs https://github.com/ViaPost-io/viapost-laravel
-composer require viapost/laravel-sdk:^0.4
+composer require viapost/laravel-sdk:^0.3
 ```
 
 Set `VIAPOST_API_KEY` in your server-side environment. Laravel auto-discovers the provider and

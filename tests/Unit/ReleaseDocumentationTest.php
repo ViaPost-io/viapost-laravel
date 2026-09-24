@@ -15,6 +15,7 @@ final class ReleaseDocumentationTest extends TestCase
         $version = Client::VERSION;
         $minor = preg_replace('/\.\d+$/', '', $version);
         self::assertIsString($minor);
+        $publishedMinor = '0.3';
 
         $readme = file_get_contents($root.'/README.md');
         $security = file_get_contents($root.'/SECURITY.md');
@@ -23,9 +24,9 @@ final class ReleaseDocumentationTest extends TestCase
         self::assertIsString($security);
         self::assertIsString($changelog);
 
-        self::assertSame(2, substr_count($readme, "composer require viapost/laravel-sdk:^{$minor}"));
-        self::assertStringContainsString("Próxima major `{$minor}.x`", $readme);
-        self::assertStringContainsString("latest `{$minor}.x` release", $security);
+        self::assertSame(2, substr_count($readme, "composer require viapost/laravel-sdk:^{$publishedMinor}"));
+        self::assertStringContainsString("`{$version}` ainda não foi publicada", $readme);
+        self::assertStringContainsString("latest published `{$publishedMinor}.x` release", $security);
         self::assertStringContainsString("### Planned for {$version}", $changelog);
     }
 }
