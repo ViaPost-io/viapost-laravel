@@ -92,6 +92,12 @@ cada teste focado é executado.
   the SDK version advanced to `0.3.0`.
 - GREEN 15 — the guard passed after aligning both README install commands, the beta/support policy,
   and the dated `0.3.0` changelog entry.
+- RED 16 — `vendor/bin/phpunit --filter SupportPolicyTest` failed because the package still allowed
+  unpatched Laravel 11 and CI explicitly permitted its audit to fail.
+- GREEN 16 — the focused policy test passed after restricting the Illuminate packages to Laravel
+  12.61.1+ or 13.12.0+, removing the Laravel 11 lane and making `composer audit --locked` a
+  mandatory step in every supported CI lane. The next SDK version was advanced to 0.4.0, keeping
+  the breaking support-policy change out of the already released 0.3.0 line.
 
 ## Refactor and final verification / Refatoração e verificação final
 
@@ -109,11 +115,11 @@ the suite stayed green after each formatting/static-analysis pass.
 - Local coverage was unavailable because no coverage driver is installed. CI explicitly provisions
   Xdebug and runs the coverage command.
 
-Composer 2.10 currently blocks resolution of Laravel 11 because the framework's latest 11.x release
-has upstream advisories. Compatibility was therefore tested in isolation with Composer's
-`--no-blocking` mode, followed by a visible audit failure (three advisories, including HIGH
-`GHSA-5vg9-5847-vvmq`); the maintained Laravel 12/13 dependency sets retain normal security
-blocking and auditing. Current Guzzle documentation confirms that `on_headers` runs before body
+Laravel 11 is no longer supported because its security support ended without an 11.x fix for HIGH
+`GHSA-5vg9-5847-vvmq`. The SDK supports Laravel 12.61.1+ and 13.12.0+ only; every CI lane runs
+`composer audit --locked` as a blocking gate. Applications on Laravel 11 must upgrade to Laravel 12
+before adopting the planned 0.4.0 breaking release. Current Guzzle documentation confirms that
+`on_headers` runs before body
 download and rejects on throw, while `progress` receives four byte counters. Installed-source
 verification showed that Guzzle 7 ignores a progress callback's return value whereas Guzzle 8 can
 honor it, so the SDK throws to provide the same early-abort behavior across both generations.

@@ -24,8 +24,8 @@ final class ReleaseDocumentationTest extends TestCase
         self::assertIsString($changelog);
 
         self::assertSame(2, substr_count($readme, "composer require viapost/laravel-sdk:^{$minor}"));
-        self::assertStringContainsString("Beta `{$minor}.x`", $readme);
+        self::assertStringContainsString("Próxima major `{$minor}.x`", $readme);
         self::assertStringContainsString("latest `{$minor}.x` release", $security);
-        self::assertStringContainsString("## [{$version}] - 2026-09-18", $changelog);
+        self::assertStringContainsString("### Planned for {$version}", $changelog);
     }
 }

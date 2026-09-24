@@ -1,17 +1,16 @@
 # ViaPost Laravel SDK
 
-SDK oficial server-side para a API ViaPost, com integração nativa ao Laravel 11, 12 e 13.
+SDK oficial server-side para a API ViaPost, com integração nativa ao Laravel 12 e 13.
 
-> **Status do Laravel 11:** a compatibilidade do SDK é testada, mas a versão atualmente resolvida
-> do framework possui três avisos de segurança upstream que o Composer 2.10 bloqueia, incluindo
-> uma injeção CRLF de severidade alta ([GHSA-5vg9-5847-vvmq](https://github.com/advisories/GHSA-5vg9-5847-vvmq)).
-> Não há release 11.x corrigida segundo o intervalo publicado em 11/09/2026. A lane de CI 11
-> executa e exibe o audit falho como warning não bloqueante apenas para verificar compatibilidade;
-> para aplicações suportadas, recomendamos Laravel 12 ou 13.
+> **Laravel 11 não é suportado:** o suporte de segurança do framework terminou e não há patch 11.x
+> para [GHSA-5vg9-5847-vvmq](https://github.com/advisories/GHSA-5vg9-5847-vvmq). Migre para Laravel
+> 12 antes de atualizar para a próxima versão principal do SDK; siga o
+> [guia oficial de upgrade para Laravel 12](https://laravel.com/docs/12.x/upgrade).
 
 Requer PHP 8.2 ou superior.
 
-> Beta `0.3.x`: mantenha a versão fixada e consulte o changelog antes de atualizar.
+> Próxima major `0.4.x`: migre de Laravel 11 para Laravel 12 antes de atualizar e consulte o
+> changelog para as mudanças incompatíveis.
 
 ## Instalação pelo GitHub
 
@@ -20,7 +19,7 @@ repositório VCS:
 
 ```bash
 composer config repositories.viapost vcs https://github.com/ViaPost-io/viapost-laravel
-composer require viapost/laravel-sdk:^0.3
+composer require viapost/laravel-sdk:^0.4
 ```
 
 Quando o pacote for cadastrado no Packagist, somente o segundo comando será necessário. O Laravel
@@ -117,14 +116,12 @@ por API Key. Eles implementam double opt-in por e-mail e devem ser usados pela i
 
 ## English
 
-Official server-side SDK for the ViaPost API with native Laravel 11, 12, and 13 integration.
+Official server-side SDK for the ViaPost API with native Laravel 12 and 13 integration.
 
-> **Laravel 11 status:** SDK compatibility is tested, but Composer 2.10 currently blocks the
-> resolved framework release because of three upstream advisories, including a high-severity CRLF
-> injection ([GHSA-5vg9-5847-vvmq](https://github.com/advisories/GHSA-5vg9-5847-vvmq)). No patched
-> 11.x release falls outside the published affected range as of September 11, 2026. The Laravel 11
-> CI lane runs and visibly reports the failing audit as a non-gating, compatibility-only warning;
-> use Laravel 12 or 13 for supported deployments.
+> **Laravel 11 is unsupported:** its security support has ended and no 11.x patch exists for
+> [GHSA-5vg9-5847-vvmq](https://github.com/advisories/GHSA-5vg9-5847-vvmq). Upgrade to Laravel 12
+> before updating to the next SDK major version; follow Laravel's
+> [official Laravel 12 upgrade guide](https://laravel.com/docs/12.x/upgrade).
 
 Requires PHP 8.2 or newer.
 
@@ -132,7 +129,7 @@ Install directly from public GitHub tags until Packagist is configured:
 
 ```bash
 composer config repositories.viapost vcs https://github.com/ViaPost-io/viapost-laravel
-composer require viapost/laravel-sdk:^0.3
+composer require viapost/laravel-sdk:^0.4
 ```
 
 Set `VIAPOST_API_KEY` in your server-side environment. Laravel auto-discovers the provider and
