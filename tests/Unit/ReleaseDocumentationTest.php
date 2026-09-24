@@ -19,13 +19,20 @@ final class ReleaseDocumentationTest extends TestCase
         $readme = file_get_contents($root.'/README.md');
         $security = file_get_contents($root.'/SECURITY.md');
         $changelog = file_get_contents($root.'/CHANGELOG.md');
+        $contributing = file_get_contents($root.'/CONTRIBUTING.md');
         self::assertIsString($readme);
         self::assertIsString($security);
         self::assertIsString($changelog);
+        self::assertIsString($contributing);
+        $normalizedContributing = preg_replace('/\s+/', ' ', $contributing);
+        self::assertIsString($normalizedContributing);
 
         self::assertSame(2, substr_count($readme, "composer require viapost/laravel-sdk:^{$minor}"));
         self::assertStringContainsString("Beta `{$minor}.x`", $readme);
         self::assertStringContainsString("latest `{$minor}.x` release", $security);
         self::assertStringContainsString("## [{$version}] - 2026-09-18", $changelog);
+        self::assertStringContainsString('Tags are not currently required to be signed or annotated.', $normalizedContributing);
+        self::assertStringContainsString('GitHub Actions attests the published archive to that commit.', $normalizedContributing);
+        self::assertStringNotContainsString('signed/annotated tag', $normalizedContributing);
     }
 }
