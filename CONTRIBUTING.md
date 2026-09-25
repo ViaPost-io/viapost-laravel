@@ -17,10 +17,14 @@ somente depois da revisão do contrato.
 By contributing, you agree that your contribution is licensed under MIT.
 
 As a reusable library, this repository intentionally does not commit `composer.lock`: consumers
-must resolve their own compatible dependency graph. Release source is fixed by the signed/annotated
-tag and the workflow publishes a checksum. The convenience ZIP is not promised to be byte-for-byte
-reproducible because Composer archive metadata can include filesystem timestamps; the Git tag is
-the distribution source of truth. Dependency-resolution test results are also time-bound to the
-package versions available when the workflow runs. / Como biblioteca reutilizável, este repositório
-não versiona `composer.lock`; a tag Git é a fonte de verdade, o ZIP pode variar por metadados de
-timestamp e os testes dependem das versões compatíveis disponíveis na data da execução.
+must resolve their own compatible dependency graph. Release source is fixed by an immutable,
+protected `v*` Git reference resolved to the source commit verified by the release workflow; GitHub
+Actions attests the published archive to that commit. Tags are not currently required to be signed
+or annotated. The convenience ZIP is not promised to be byte-for-byte reproducible because Composer
+archive metadata can include filesystem timestamps; the protected Git reference and release
+attestation are the distribution provenance. Dependency-resolution test results are also time-bound
+to the package versions available when the workflow runs. / Como biblioteca reutilizável, este
+repositório não versiona `composer.lock`; a referência Git `v*` protegida, o commit verificado e a
+atestado de provenance do GitHub Actions são a evidência de distribuição. As tags não exigem hoje
+assinatura nem anotação; o ZIP pode variar por metadados de timestamp e os testes dependem das
+versões compatíveis disponíveis na data da execução.
