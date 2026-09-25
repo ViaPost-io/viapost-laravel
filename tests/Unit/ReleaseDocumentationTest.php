@@ -13,8 +13,7 @@ final class ReleaseDocumentationTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         $version = Client::VERSION;
-        $minor = preg_replace('/\.\d+$/', '', $version);
-        self::assertIsString($minor);
+        $publishedMinor = '0.3';
 
         $readme = file_get_contents($root.'/README.md');
         $security = file_get_contents($root.'/SECURITY.md');
@@ -27,10 +26,10 @@ final class ReleaseDocumentationTest extends TestCase
         $normalizedContributing = preg_replace('/\s+/', ' ', $contributing);
         self::assertIsString($normalizedContributing);
 
-        self::assertSame(2, substr_count($readme, "composer require viapost/laravel-sdk:^{$minor}"));
-        self::assertStringContainsString("Beta `{$minor}.x`", $readme);
-        self::assertStringContainsString("latest `{$minor}.x` release", $security);
-        self::assertStringContainsString("## [{$version}] - 2026-09-18", $changelog);
+        self::assertSame(2, substr_count($readme, "composer require viapost/laravel-sdk:^{$publishedMinor}"));
+        self::assertStringContainsString("`{$version}` ainda não foi publicada", $readme);
+        self::assertStringContainsString("latest published `{$publishedMinor}.x` release", $security);
+        self::assertStringContainsString("### Planned for {$version}", $changelog);
         self::assertStringContainsString('Tags are not currently required to be signed or annotated.', $normalizedContributing);
         self::assertStringContainsString('GitHub Actions attests the published archive to that commit.', $normalizedContributing);
         self::assertStringNotContainsString('signed/annotated tag', $normalizedContributing);

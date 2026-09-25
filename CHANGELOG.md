@@ -9,6 +9,10 @@ versioning.
 
 - Refresh the bundled OpenAPI contract to the published public specification, including the tracking-domain API surface. High-level tracking-domain resource methods are not introduced in this release.
 
+### Planned for 0.4.0
+
+- **Breaking:** drop Laravel 11 support. Laravel 12 must be at least 12.61.1 and Laravel 13 must be at least 13.12.0 so Composer audit remains a blocking CI gate. Applications on Laravel 11 must upgrade to Laravel 12 before adopting 0.4.0.
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
