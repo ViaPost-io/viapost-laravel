@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ViaPost\Laravel\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Yaml\Yaml;
 
 final class ContractSnapshotTest extends TestCase
 {
@@ -14,7 +15,7 @@ final class ContractSnapshotTest extends TestCase
 
         self::assertFileExists($snapshot);
         self::assertSame(
-            'd42e0c5d732780b743aead543be32d6b474631dec4fd0c1c8838e1416216bc4e',
+            '96f2fa883334ff15400f51f43bee917e690030e8f3e31b1d8dcdcca2782ab77b',
             hash_file('sha256', $snapshot),
         );
     }
@@ -35,6 +36,33 @@ final class ContractSnapshotTest extends TestCase
         ] as $path) {
             self::assertStringContainsString($path, $contract);
         }
+    }
+
+    public function test_the_onboarding_recipe_route_is_session_only_and_requires_csrf(): void
+    {
+        $contract = Yaml::parseFile(dirname(__DIR__, 2).'/openapi.yaml');
+        self::assertIsArray($contract);
+
+        $paths = $contract['paths'] ?? null;
+        self::assertIsArray($paths);
+        $route = $paths['/v1/automations/{id}/recipes/saas-onboarding'] ?? null;
+        self::assertIsArray($route);
+        $operation = $route['patch'] ?? null;
+        self::assertIsArray($operation);
+        self::assertSame([['sessionCookie' => []]], $operation['security']);
+        $parameters = $operation['parameters'] ?? null;
+        self::assertIsArray($parameters);
+        self::assertContains(
+            ['$ref' => '#/components/parameters/RequiredCsrfHeader'],
+            $parameters,
+        );
+        $components = $contract['components'] ?? null;
+        self::assertIsArray($components);
+        $componentParameters = $components['parameters'] ?? null;
+        self::assertIsArray($componentParameters);
+        $csrf = $componentParameters['RequiredCsrfHeader'] ?? null;
+        self::assertIsArray($csrf);
+        self::assertTrue($csrf['required']);
     }
 
     public function test_the_contract_checker_accepts_equivalent_yaml_serialization_and_rejects_semantic_drift(): void
