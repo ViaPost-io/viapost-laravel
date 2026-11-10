@@ -9,11 +9,27 @@ use ViaPost\Laravel\Responses\WebhookSecretResponse;
 
 final readonly class WebhooksResource extends Resource
 {
-    /** @return array<string, mixed> */
-    public function list(): array
+    /**
+     * @param  array<string, scalar|null>  $query
+     * @return array<string, mixed>
+     */
+    public function list(array $query = []): array
     {
+        $allowed = ['q', 'enabled', 'event_type', 'from', 'to', 'limit', 'cursor', 'sort'];
+        if (array_diff(array_keys($query), $allowed) !== []) {
+            throw new InvalidArgumentException('ViaPost webhook list contains unsupported query parameters.');
+        }
+        if (array_key_exists('limit', $query)
+            && (! is_int($query['limit']) || $query['limit'] < 1 || $query['limit'] > 100)) {
+            throw new InvalidArgumentException('ViaPost webhook list limit must be an integer between 1 and 100.');
+        }
+        if (array_key_exists('sort', $query)
+            && ! in_array($query['sort'], ['created_at_desc', 'created_at_asc'], true)) {
+            throw new InvalidArgumentException('ViaPost webhook list sort is unsupported.');
+        }
+
         /** @var array<string, mixed> */
-        return $this->client->request('GET', '/v1/webhooks');
+        return $this->client->request('GET', '/v1/webhooks', query: $query);
     }
 
     /**
@@ -21,9 +37,11 @@ final readonly class WebhooksResource extends Resource
      */
     public function create(array $input): WebhookSecretResponse
     {
-        if (array_diff(array_keys($input), ['url', 'event_types']) !== []) {
+        $allowed = ['name', 'enabled', 'max_attempts', 'url', 'description', 'event_types'];
+        if (array_diff(array_keys($input), $allowed) !== []) {
             throw new InvalidArgumentException('ViaPost webhook create contains unsupported properties.');
         }
+        $this->validateOptionalWebhookFields($input);
         $this->validateUrl($input['url'] ?? null, required: true);
         $this->validateEventTypes($input['event_types'] ?? null);
 
@@ -39,7 +57,7 @@ final readonly class WebhooksResource extends Resource
      */
     public function update(string $webhookId, array $input): array
     {
-        $allowed = ['expected_version', 'enabled', 'event_types', 'max_attempts'];
+        $allowed = ['name', 'expected_version', 'url', 'description', 'enabled', 'event_types', 'max_attempts'];
         if (array_diff(array_keys($input), $allowed) !== []) {
             throw new InvalidArgumentException('ViaPost webhook update contains unsupported properties.');
         }
@@ -49,15 +67,12 @@ final readonly class WebhooksResource extends Resource
         if (! isset($input['expected_version']) || ! is_int($input['expected_version']) || $input['expected_version'] < 1) {
             throw new InvalidArgumentException('ViaPost webhook expected_version must be an integer of at least 1.');
         }
-        if (array_key_exists('enabled', $input) && ! is_bool($input['enabled'])) {
-            throw new InvalidArgumentException('ViaPost webhook enabled must be boolean.');
+        $this->validateOptionalWebhookFields($input);
+        if (array_key_exists('url', $input)) {
+            $this->validateUrl($input['url'], required: true);
         }
         if (array_key_exists('event_types', $input)) {
             $this->validateEventTypes($input['event_types']);
-        }
-        if (array_key_exists('max_attempts', $input)
-            && (! is_int($input['max_attempts']) || $input['max_attempts'] < 1 || $input['max_attempts'] > 20)) {
-            throw new InvalidArgumentException('ViaPost webhook max_attempts must be an integer between 1 and 20.');
         }
 
         /** @var array<string, mixed> */
@@ -70,6 +85,19 @@ final readonly class WebhooksResource extends Resource
      */
     public function deliveries(string $webhookId, array $query = []): array
     {
+        $allowed = ['cursor', 'limit', 'status', 'event_type', 'response_code', 'delivery_id'];
+        if (array_diff(array_keys($query), $allowed) !== []) {
+            throw new InvalidArgumentException('ViaPost webhook delivery list contains unsupported query parameters.');
+        }
+        if (array_key_exists('limit', $query)
+            && (! is_int($query['limit']) || $query['limit'] < 1 || $query['limit'] > 100)) {
+            throw new InvalidArgumentException('ViaPost webhook delivery list limit must be an integer between 1 and 100.');
+        }
+        if (array_key_exists('response_code', $query)
+            && (! is_int($query['response_code']) || $query['response_code'] < 100 || $query['response_code'] > 599)) {
+            throw new InvalidArgumentException('ViaPost webhook response_code must be an integer between 100 and 599.');
+        }
+
         /** @var array<string, mixed> */
         return $this->client->request('GET', $this->path($webhookId).'/deliveries', query: $query);
     }
@@ -190,6 +218,38 @@ final readonly class WebhooksResource extends Resource
         if (count(array_unique($eventTypes, SORT_STRING)) !== count($eventTypes)) {
             throw new InvalidArgumentException('ViaPost webhook event_types must not contain duplicates.');
         }
+    }
+
+    /** @param array<string, mixed> $input */
+    private function validateOptionalWebhookFields(array $input): void
+    {
+        foreach (['name' => 100, 'description' => 200] as $field => $maxLength) {
+            if (array_key_exists($field, $input)
+                && (! is_string($input[$field]) || $this->utf8Length($input[$field]) > $maxLength)) {
+                throw new InvalidArgumentException(sprintf(
+                    'ViaPost webhook %s must be a string of at most %d characters.',
+                    $field,
+                    $maxLength,
+                ));
+            }
+        }
+        if (array_key_exists('enabled', $input) && ! is_bool($input['enabled'])) {
+            throw new InvalidArgumentException('ViaPost webhook enabled must be boolean.');
+        }
+        if (array_key_exists('max_attempts', $input)
+            && (! is_int($input['max_attempts']) || $input['max_attempts'] < 1 || $input['max_attempts'] > 20)) {
+            throw new InvalidArgumentException('ViaPost webhook max_attempts must be an integer between 1 and 20.');
+        }
+    }
+
+    private function utf8Length(string $value): int
+    {
+        $length = preg_match_all('/./us', $value);
+        if ($length === false) {
+            throw new InvalidArgumentException('ViaPost webhook text fields must contain valid UTF-8.');
+        }
+
+        return $length;
     }
 
     private function isMulticastIp(string $host): bool

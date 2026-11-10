@@ -15,7 +15,7 @@ final class ContractSnapshotTest extends TestCase
 
         self::assertFileExists($snapshot);
         self::assertSame(
-            '96f2fa883334ff15400f51f43bee917e690030e8f3e31b1d8dcdcca2782ab77b',
+            'a58782a840d21315907466baa86734f6bbec8cc5007a6e8ac3fa79c8b94e53d4',
             hash_file('sha256', $snapshot),
         );
     }
