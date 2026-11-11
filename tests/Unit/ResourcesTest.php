@@ -75,10 +75,37 @@ final class ResourcesTest extends TestCase
         $this->client->templates()->versions('t/id');
         $this->client->templates()->version('t/id', 'v/id');
         $this->client->templates()->revert('t/id', 'v/id', $body);
-        $this->client->webhooks()->list();
-        $this->client->webhooks()->create(['url' => 'https://example.com/hook', 'event_types' => ['delivered']]);
-        $this->client->webhooks()->update('w/id', ['expected_version' => 1, 'enabled' => true]);
-        $this->client->webhooks()->deliveries('w/id');
+        $this->client->webhooks()->list([
+            'q' => 'billing',
+            'enabled' => true,
+            'limit' => 25,
+            'cursor' => 'next',
+            'sort' => 'created_at_asc',
+        ]);
+        $this->client->webhooks()->create([
+            'name' => 'Billing events',
+            'url' => 'https://example.com/hook',
+            'description' => 'Integration endpoint',
+            'enabled' => true,
+            'max_attempts' => 8,
+            'event_types' => ['delivered'],
+        ]);
+        $this->client->webhooks()->update('w/id', [
+            'expected_version' => 1,
+            'name' => 'Updated billing events',
+            'url' => 'https://example.com/new-hook',
+            'description' => '',
+            'enabled' => true,
+            'max_attempts' => 8,
+        ]);
+        $this->client->webhooks()->deliveries('w/id', [
+            'cursor' => 'next',
+            'limit' => 25,
+            'status' => 'delivered',
+            'event_type' => 'delivered',
+            'response_code' => 200,
+            'delivery_id' => 'delivery/id',
+        ]);
         $this->client->webhooks()->delivery('w/id', 'delivery/id');
         $this->client->webhooks()->replay('w/id', 'delivery/id', 'replay-1');
         $this->client->webhooks()->test('w/id', 'test-1');
@@ -339,7 +366,7 @@ final class ResourcesTest extends TestCase
             fn () => $this->client->webhooks()->update('webhook', ['url' => 'file:///tmp/hook']),
             fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 1]),
             fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 0, 'enabled' => true]),
-            fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 1, 'url' => 'https://example.com/hook']),
+            fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 1, 'url' => null]),
             fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 1, 'unknown' => true]),
             fn () => $this->client->webhooks()->update('webhook', ['event_types' => []]),
             fn () => $this->client->webhooks()->update('webhook', ['expected_version' => 1, 'event_types' => ['open', 'open']]),
